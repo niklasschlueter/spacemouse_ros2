@@ -139,14 +139,19 @@ Everything else (sensitivity, deadband, clipping, snap) has sensible defaults an
 
 ### Identify connected SpaceMouse devices
 
-Required only when multiple devices are connected. Run:
+Required when multiple devices are connected or for dual-device mode. Run:
 
 ```bash
 grep -H . /sys/class/hidraw/hidraw*/device/uevent | grep SpaceMouse
 ```
 
-Example output: `/sys/class/hidraw/hidraw1/device/uevent:HID_NAME=3Dconnexion SpaceMouse Wireless BT`
-→ set `device_path: /dev/hidraw1`
+Example output:
+```
+/sys/class/hidraw/hidraw3/device/uevent:HID_NAME=3Dconnexion SpaceMouse Compact
+/sys/class/hidraw/hidraw4/device/uevent:HID_NAME=3Dconnexion SpaceMouse Compact
+```
+
+**Note:** Each physical SpaceMouse typically registers **two** hidraw entries (one for motion, one for buttons/LEDs). To find which entries belong to which device, unplug one and run the command again — the remaining entries are the other device. Set `device_path` to either hidraw number for a given device; `pyspacemouse` handles the rest.
 
 ---
 
@@ -156,6 +161,7 @@ Example output: `/sys/class/hidraw/hidraw1/device/uevent:HID_NAME=3Dconnexion Sp
 |---|---|---|---|
 | `namespace` | string | `""` | ROS 2 namespace. Must match the robot controller's namespace. |
 | `device_path` | string | `""` | HID path of the SpaceMouse (e.g. `/dev/hidraw1`). Empty = auto-detect first device. |
+| `secondary_device_path` | string | *(none)* | HID path of a second SpaceMouse for [dual-device mode](#dual-device-example-split-translation--rotation). When set, use `spacemouse_dual_device.launch.py`. |
 | `operator_position_front` | bool | `true` | `true` if the operator faces the front of the robot base. `false` inverts X/Y so "push forward" always means away from the operator. |
 | `input_frame_rpy` | float[3] | `[0, 0, 0]` | Rotation `[roll, pitch, yaw]` in degrees (intrinsic ZYX) applied to all SpaceMouse inputs before EE/world-frame processing. Compensates for operator orientation (e.g. sitting 90° to the side: `[0, 0, 90]`) or non-standard tool mounting. |
 | `flip_input_x` | bool | `false` | Invert the SpaceMouse X axis after `input_frame_rpy`. Any single axis can be flipped independently. |
@@ -226,12 +232,36 @@ RIGHT:
 
 ---
 
+## Dual-device example (split translation / rotation)
+
+Use two SpaceMice to control a single arm — one hand for translation, the other for rotation. See `example_dual_device_config.yaml`. Set `device_path` and `secondary_device_path` to your devices:
+
+```yaml
+robot1:
+  device_path: /dev/hidraw3            # primary — translation
+  secondary_device_path: /dev/hidraw4  # secondary — rotation
+  ...
+```
+
+Launch with the dedicated dual-device launch file:
+
+```bash
+pixi run start-dual
+```
+
+The primary device's linear axes drive translation; the secondary device's angular axes drive rotation. All other parameters (sensitivity, deadband, clipping, snap, gripper) apply as normal. Gripper buttons work on the primary device.
+
+---
+
 ## Building and testing
 
 ```bash
 pixi run build       # colcon build --symlink-install
-pixi run start       # source install/setup.bash && ros2 launch ...
+pixi run start       # single-device launch
+pixi run start-dual  # dual-device launch (split translation / rotation)
 pixi run clean       # remove build/, install/, log/
+pixi run lint        # ruff check + format check
+pixi run format      # auto-format with ruff
 ```
 
 Run the ROS 2 linting tests:

@@ -45,9 +45,10 @@ class SpaceMousePublisher(Node):
         self._gripper_action_client = None
         self._goal_in_flight = False
 
-        self._twist_publisher = self.create_publisher(
-            Twist, "space_mouse/target_cartesian_velocity_percent", 10
-        )
+        self.declare_parameter("twist_topic", "space_mouse/target_cartesian_velocity_percent")
+        twist_topic = self.get_parameter("twist_topic").get_parameter_value().string_value
+
+        self._twist_publisher = self.create_publisher(Twist, twist_topic, 10)
 
         if self._gripper_interface == "action":
             from control_msgs.action import GripperCommand
@@ -64,7 +65,7 @@ class SpaceMousePublisher(Node):
             self._gripper_max_effort = (
                 self.get_parameter("gripper_max_effort").get_parameter_value().double_value
             )
-            self._GripperCommand = GripperCommand
+            self._gripper_command_cls = GripperCommand
             self._gripper_action_client = ActionClient(self, GripperCommand, gripper_action)
             self.get_logger().info(f"Gripper action client: {gripper_action}")
         else:
@@ -84,7 +85,7 @@ class SpaceMousePublisher(Node):
             return
         if self._goal_in_flight:
             return
-        goal = self._GripperCommand.Goal()
+        goal = self._gripper_command_cls.Goal()
         goal.command.position = width_fraction * self._gripper_max_position
         goal.command.max_effort = self._gripper_max_effort
         self._goal_in_flight = True
@@ -97,7 +98,10 @@ class SpaceMousePublisher(Node):
             self._goal_in_flight = False
             return
         result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(lambda f: setattr(self, "_goal_in_flight", False))
+        result_future.add_done_callback(self._goal_result_callback)
+
+    def _goal_result_callback(self, future):
+        self._goal_in_flight = False
 
     def _publish_gripper(self, width_fraction):
         if self._gripper_interface == "action":
@@ -113,6 +117,7 @@ class SpaceMousePublisher(Node):
 
         state = pyspacemouse.read()
 
+        # Map SpaceMouse HID axes to ROS convention (X-forward, Y-left, Z-up)
         twist_msg = Twist()
         twist_msg.linear.x = -float(state.y)
         twist_msg.linear.y = float(state.x)

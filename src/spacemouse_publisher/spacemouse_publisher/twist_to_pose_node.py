@@ -105,8 +105,14 @@ class TwistToPoseNode(Node):
         # Whether the target has been seeded from current_pose yet
         self._pose_initialized = False
 
-        # Latest Twist command
+        # Latest Twist commands
         self.current_twist = Twist()
+
+        # Optional secondary device for split translation/rotation control
+        self.declare_parameter("secondary_twist_topic", "")
+        secondary_twist_topic = self.get_parameter("secondary_twist_topic").value
+        self._dual_device = bool(secondary_twist_topic)
+        self._secondary_twist = Twist()
 
         # Publishers and Subscribers
         self.pose_pub = self.create_publisher(PoseStamped, target_pose_topic, 10)
@@ -117,6 +123,17 @@ class TwistToPoseNode(Node):
             self._twist_callback,
             10,
         )
+
+        if self._dual_device:
+            self.create_subscription(
+                Twist,
+                secondary_twist_topic,
+                self._secondary_twist_callback,
+                10,
+            )
+            self.get_logger().info(
+                f"Dual device mode: linear from primary, angular from '{secondary_twist_topic}'"
+            )
 
         self.actual_pose_sub = self.create_subscription(
             PoseStamped, current_pose_topic, self._actual_pose_callback, 10
@@ -131,8 +148,12 @@ class TwistToPoseNode(Node):
         self.timer = self.create_timer(self.dt, self._integration_timer_callback)
 
     def _twist_callback(self, msg: Twist):
-        """Stores the latest Twist command from the SpaceMouse."""
+        """Stores the latest Twist command from the primary SpaceMouse."""
         self.current_twist = msg
+
+    def _secondary_twist_callback(self, msg: Twist):
+        """Stores the latest Twist command from the secondary SpaceMouse."""
+        self._secondary_twist = msg
 
     def _actual_pose_callback(self, msg: PoseStamped):
         """Updates the internal tracker with the robot's real physical location."""
@@ -171,27 +192,29 @@ class TwistToPoseNode(Node):
         if not self._pose_initialized:
             return
 
-        # 1. Apply deadband to raw inputs
+        # 1. Select angular source (secondary device in dual mode, primary otherwise).
+        angular_src = self._secondary_twist if self._dual_device else self.current_twist
+
+        # 2. Apply deadband to raw inputs.
         lx = self._apply_deadzone(self.current_twist.linear.x, self.linear_deadzone)
         ly = self._apply_deadzone(self.current_twist.linear.y, self.linear_deadzone)
         lz = self._apply_deadzone(self.current_twist.linear.z, self.linear_deadzone)
-        ax = self._apply_deadzone(self.current_twist.angular.x, self.angular_deadzone)
-        ay = self._apply_deadzone(self.current_twist.angular.y, self.angular_deadzone)
-        az = self._apply_deadzone(self.current_twist.angular.z, self.angular_deadzone)
+        ax = self._apply_deadzone(angular_src.angular.x, self.angular_deadzone)
+        ay = self._apply_deadzone(angular_src.angular.y, self.angular_deadzone)
+        az = self._apply_deadzone(angular_src.angular.z, self.angular_deadzone)
 
-        # 2. Snap target to actual pose when inputs are near idle.
-        # Uses snap_threshold on raw input (larger than deadzone) so the snap fires
-        # while the device is still springing back to center, not after full settle.
-        t = self.current_twist
+        # 3. Check if idle — if so, snap target to actual pose and skip integration.
+        #    Uses snap_threshold on raw input (larger than deadzone) so the snap fires
+        #    while the device is still springing back to center, not after full settle.
         linear_idle = (
-            abs(t.linear.x) < self.linear_snap_threshold
-            and abs(t.linear.y) < self.linear_snap_threshold
-            and abs(t.linear.z) < self.linear_snap_threshold
+            abs(self.current_twist.linear.x) < self.linear_snap_threshold
+            and abs(self.current_twist.linear.y) < self.linear_snap_threshold
+            and abs(self.current_twist.linear.z) < self.linear_snap_threshold
         )
         angular_idle = (
-            abs(t.angular.x) < self.angular_snap_threshold
-            and abs(t.angular.y) < self.angular_snap_threshold
-            and abs(t.angular.z) < self.angular_snap_threshold
+            abs(angular_src.angular.x) < self.angular_snap_threshold
+            and abs(angular_src.angular.y) < self.angular_snap_threshold
+            and abs(angular_src.angular.z) < self.angular_snap_threshold
         )
         if linear_idle and angular_idle:
             if self.snap_to_actual_on_idle:
@@ -203,7 +226,7 @@ class TwistToPoseNode(Node):
                 self.target_qz = self.actual_qz
                 self.target_qw = self.actual_qw
         else:
-            # 3. Scale by sensitivity and timestep
+            # 4. Scale by sensitivity and timestep.
             lx *= self.linear_scale * self.dt
             ly *= self.linear_scale * self.dt
             lz *= self.linear_scale * self.dt
@@ -211,7 +234,7 @@ class TwistToPoseNode(Node):
             ay *= self.angular_scale * self.dt
             az *= self.angular_scale * self.dt
 
-            # 3b. Apply input frame rotation and per-axis flips
+            # 5. Apply input frame rotation and per-axis flips.
             if self._input_qw < 1.0:  # skip if identity quaternion
                 lx, ly, lz = self._rotate_vector_by_quaternion(
                     lx,
@@ -238,7 +261,7 @@ class TwistToPoseNode(Node):
             if self._flip_input_z:
                 lz, az = -lz, -az
 
-            # 4. Rotate into world frame if EE-relative mode is active
+            # 6. Rotate into world frame if EE-relative mode is active.
             if self.translation_frame == "ee":
                 lx, ly, lz = self._rotate_vector_by_quaternion(
                     lx,
@@ -260,13 +283,13 @@ class TwistToPoseNode(Node):
                     self.actual_qw,
                 )
 
-            # 5. Integrate translation
+            # 7. Integrate translation.
             self.target_x += lx
             self.target_y += ly
             self.target_z += lz
 
-            # 6. Integrate rotation via quaternion composition (avoids gimbal lock/wrapping)
-            # (ax, ay, az) is a rotation vector in world frame; convert to quaternion delta.
+            # 8. Integrate rotation via quaternion composition (avoids gimbal lock/wrapping).
+            #    (ax, ay, az) is a rotation vector in world frame; convert to quaternion delta.
             dqx, dqy, dqz, dqw = self._rotation_vector_to_quaternion(ax, ay, az)
             # Apply world-frame rotation: q_new = dq * q_target
             self.target_qx, self.target_qy, self.target_qz, self.target_qw = (
@@ -288,7 +311,7 @@ class TwistToPoseNode(Node):
                 )
             )
 
-            # 7. Apply translational clip
+            # 9. Apply translational clip.
             dist = math.sqrt(
                 (self.target_x - self.actual_x) ** 2
                 + (self.target_y - self.actual_y) ** 2
@@ -300,7 +323,7 @@ class TwistToPoseNode(Node):
                 self.target_y = self.actual_y + (self.target_y - self.actual_y) * scale_factor
                 self.target_z = self.actual_z + (self.target_z - self.actual_z) * scale_factor
 
-            # 8. Apply rotational clip (quaternion-space, avoids wrapping)
+            # 10. Apply rotational clip (quaternion-space, avoids wrapping).
             (self.target_qx, self.target_qy, self.target_qz, self.target_qw) = (
                 self._clip_rotation_to_actual(
                     self.target_qx,
@@ -315,7 +338,7 @@ class TwistToPoseNode(Node):
                 )
             )
 
-        # 9. Publish the target pose
+        # 11. Publish the target pose.
         pose_msg = PoseStamped()
         pose_msg.header.stamp = self.get_clock().now().to_msg()
         pose_msg.header.frame_id = "base_link"

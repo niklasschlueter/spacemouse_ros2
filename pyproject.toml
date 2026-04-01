@@ -39,6 +39,7 @@ libhidapi = "*"
 build = "colcon build --symlink-install"
 clean = "rm -rf build/ install/ log/"
 start = "bash -c 'source install/setup.bash && ros2 launch spacemouse_publisher spacemouse_publisher.launch.py $*' --"
+start-dual = "bash -c 'source install/setup.bash && ros2 launch spacemouse_publisher spacemouse_dual_device.launch.py config_file:=example_dual_device_config.yaml $*' --"
 lint = "ruff check src/ && ruff format --check src/"
 format = "ruff format src/"
 

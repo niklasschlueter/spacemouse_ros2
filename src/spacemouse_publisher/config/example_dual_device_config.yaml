@@ -1,0 +1,70 @@
+# SpaceMouse Publisher — dual-device single-arm configuration
+#
+# Two SpaceMice control one robot arm: the primary handles translation,
+# the secondary handles rotation.
+# Launch with: pixi run start-dual config_file:=example_dual_device_config.yaml
+#
+# See example_config.yaml for full parameter documentation.
+
+robot1:
+
+  # ── Devices ────────────────────────────────────────────────────────────────
+
+  namespace: ''
+
+  # Primary SpaceMouse — controls translation.
+  device_path: '/dev/hidraw3'
+
+  # Secondary SpaceMouse — controls rotation.
+  secondary_device_path: '/dev/hidraw4'
+
+  operator_position_front: true
+  input_frame_rpy: [0.0, 0.0, 0.0]
+  flip_input_x: false
+  flip_input_y: false
+  flip_input_z: false
+
+  # ── Topics ─────────────────────────────────────────────────────────────────
+
+  current_pose_topic: "/current_pose"
+  target_pose_topic: "/target_pose"
+
+  # ── Input frame ────────────────────────────────────────────────────────────
+
+  translation_frame: "world"
+  rotation_frame: "world"
+
+  # ── Sensitivity ────────────────────────────────────────────────────────────
+
+  linear_scale: 0.35
+  angular_scale: 1.0
+
+  # ── Deadband ───────────────────────────────────────────────────────────────
+
+  linear_deadzone: 0.0
+  angular_deadzone: 0.0
+
+  # ── Safety clipping ────────────────────────────────────────────────────────
+
+  max_distance: 0.15
+  max_rotation: 0.5
+
+  # ── Idle snap ──────────────────────────────────────────────────────────────
+
+  snap_to_actual_on_idle: true
+  linear_snap_threshold: 0.15
+  angular_snap_threshold: 0.15
+
+  # ── Gripper ────────────────────────────────────────────────────────────────
+
+  gripper_interface: "action"
+  gripper_topic: "space_mouse/target_gripper_width_percent"
+  gripper_action: "manipulators/arm_0_gripper_controller/gripper_cmd"
+  gripper_max_position: 0.8
+  gripper_max_effort: 50.0
+  gripper_mode: "absolute"
+  gripper_step: 0.01
+
+  # ── Timing ─────────────────────────────────────────────────────────────────
+
+  timer_period: 0.01
