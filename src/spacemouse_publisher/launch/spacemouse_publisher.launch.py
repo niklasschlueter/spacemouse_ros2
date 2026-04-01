@@ -55,6 +55,26 @@ def generate_nodes(context):
                         if "gripper_step" in config
                         else []
                     ),
+                    *(
+                        [{"gripper_interface": str(config["gripper_interface"])}]
+                        if "gripper_interface" in config
+                        else []
+                    ),
+                    *(
+                        [{"gripper_action": str(config["gripper_action"])}]
+                        if "gripper_action" in config
+                        else []
+                    ),
+                    *(
+                        [{"gripper_max_position": float(config["gripper_max_position"])}]
+                        if "gripper_max_position" in config
+                        else []
+                    ),
+                    *(
+                        [{"gripper_max_effort": float(config["gripper_max_effort"])}]
+                        if "gripper_max_effort" in config
+                        else []
+                    ),
                 ],
             )
         )

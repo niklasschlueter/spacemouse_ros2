@@ -22,7 +22,6 @@ setup(
         "This package provides a node that publishes the data from a 3Dconnexion SpaceMouse."
     ),
     license="Apache 2.0",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "pyspacemouse_publisher = spacemouse_publisher.pyspacemouse_publisher:main",

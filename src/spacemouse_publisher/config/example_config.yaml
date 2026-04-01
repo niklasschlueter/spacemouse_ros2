@@ -104,8 +104,38 @@ robot1:
 
   # ── Gripper ────────────────────────────────────────────────────────────────
 
+  # How gripper commands are sent:
+  #   "topic"  — publishes std_msgs/Float32 (range 0–1) to gripper_topic.
+  #              Requires a bridge node to forward to the actual gripper controller.
+  #   "action" — sends control_msgs/action/GripperCommand goals directly to the
+  #              gripper action server (e.g. ros2_control GripperActionController).
+  # How gripper commands are sent:
+  #   "topic"  — publishes std_msgs/Float32 (range 0–1) to gripper_topic.
+  #              Requires a bridge node to forward to the actual gripper controller.
+  #   "action" — sends control_msgs/action/GripperCommand goals directly to the
+  #              gripper action server (e.g. ros2_control GripperActionController).
+  gripper_interface: "action"
+
+  # ── Topic mode ─────────────────────────────────────────────────────────────
+
   # Topic on which gripper commands are published (std_msgs/Float32, range 0–1).
+  # Only used when gripper_interface is "topic".
   gripper_topic: "space_mouse/target_gripper_width_percent"
+
+  # ── Action mode ────────────────────────────────────────────────────────────
+
+  # Action server name for the gripper controller.
+  # Only used when gripper_interface is "action".
+  gripper_action: "manipulators/arm_0_gripper_controller/gripper_cmd"
+
+  # Gripper joint position (radians) corresponding to fully closed (Float32 = 1.0).
+  # Robotiq 2F-85: 0.8 rad. Adjust for your gripper model.
+  gripper_max_position: 0.8
+
+  # Maximum effort sent with every GripperCommand goal (N or Nm, gripper-dependent).
+  gripper_max_effort: 50.0
+
+  # ── Shared ─────────────────────────────────────────────────────────────────
 
   # Gripper button mode:
   #   "absolute" — one press fully opens (Button 1 → 0.0) or closes (Button 2 → 1.0).

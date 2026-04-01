@@ -162,6 +162,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-ament-uncrustify-0.17.4-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-builtin-interfaces-2.0.3-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-composition-interfaces-2.0.3-np2py312h2ed9cc7_16.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-control-msgs-5.8.0-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-cyclonedds-0.10.5-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-domain-coordinator-0.12.0-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-fastcdr-2.2.7-np2py312h2ed9cc7_16.conda
@@ -234,10 +235,12 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rosidl-typesupport-introspection-cpp-4.6.7-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rpyutils-0.4.2-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-rti-connext-dds-cmake-module-0.22.3-np2py312h2ed9cc7_16.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-sensor-msgs-5.3.6-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-service-msgs-2.0.3-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-spdlog-vendor-1.6.1-np2py312h918b84f_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-std-msgs-5.3.6-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-tracetools-8.2.5-np2py312h2ed9cc7_16.conda
+      - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-trajectory-msgs-5.3.6-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-type-description-interfaces-2.0.3-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-uncrustify-vendor-3.0.1-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-unique-identifier-msgs-2.5.0-np2py312h2ed9cc7_16.conda
@@ -2489,6 +2492,30 @@ packages:
   license: Apache-2.0
   size: 226936
   timestamp: 1771184715615
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-control-msgs-5.8.0-np2py312h2ed9cc7_16.conda
+  sha256: 9716c84d0a0001935c83d890fa3a7c69f4ae1a7ec60a841f2dfcd9e1058fd05c
+  md5: cc81c992bb12ebbccd2d48d4eb8453f7
+  depends:
+  - python
+  - ros-jazzy-action-msgs
+  - ros-jazzy-builtin-interfaces
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-rosidl-default-runtime
+  - ros-jazzy-sensor-msgs
+  - ros-jazzy-std-msgs
+  - ros-jazzy-trajectory-msgs
+  - ros2-distro-mutex 0.14.* jazzy_*
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - ros2-distro-mutex >=0.14.0,<0.15.0a0
+  - numpy >=1.23,<3
+  - python_abi 3.12.* *_cp312
+  license: BSD-3-Clause
+  size: 1285912
+  timestamp: 1771185148025
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-cyclonedds-0.10.5-np2py312h2ed9cc7_16.conda
   sha256: f904ba801dccf0eb3c8982a0fbfb93496e05038e44d763f70fea04c1d6aaa2d7
   md5: ef094c4926971c6c8e85726ba729609b
@@ -4054,6 +4081,27 @@ packages:
   license: Apache-2.0
   size: 31616
   timestamp: 1771182984679
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-sensor-msgs-5.3.6-np2py312h2ed9cc7_16.conda
+  sha256: 4eb2c2a6a383a36d05c518eb102e43cc05cee97dbe2782f5cbc0b99f761b6f52
+  md5: 53d32c3c53dab08544ae708c83b3e256
+  depends:
+  - python
+  - ros-jazzy-builtin-interfaces
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-rosidl-default-runtime
+  - ros-jazzy-std-msgs
+  - ros2-distro-mutex 0.14.* jazzy_*
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - numpy >=1.23,<3
+  - ros2-distro-mutex >=0.14.0,<0.15.0a0
+  - python_abi 3.12.* *_cp312
+  license: Apache-2.0
+  size: 549740
+  timestamp: 1771184872168
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-service-msgs-2.0.3-np2py312h2ed9cc7_16.conda
   sha256: 551e222052e6c1f4ddd3f239db1b802cbc27dbe39bbbc0bc84950c9c8b48fd82
   md5: 8036867899d108279f701ca0fae16181
@@ -4131,6 +4179,27 @@ packages:
   license: Apache-2.0
   size: 72853
   timestamp: 1771183045095
+- conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-trajectory-msgs-5.3.6-np2py312h2ed9cc7_16.conda
+  sha256: 32c540b92233ff6df1307b6004365aeceebe7c801961b3e2d8ddc015782e36a7
+  md5: b4ea107c58e3bb65941c42bd527e50da
+  depends:
+  - python
+  - ros-jazzy-builtin-interfaces
+  - ros-jazzy-geometry-msgs
+  - ros-jazzy-ros-workspace
+  - ros-jazzy-rosidl-default-runtime
+  - ros-jazzy-std-msgs
+  - ros2-distro-mutex 0.14.* jazzy_*
+  - libstdcxx >=14
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - python_abi 3.12.* *_cp312
+  - ros2-distro-mutex >=0.14.0,<0.15.0a0
+  - numpy >=1.23,<3
+  license: Apache-2.0
+  size: 150710
+  timestamp: 1771184926724
 - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-type-description-interfaces-2.0.3-np2py312h2ed9cc7_16.conda
   sha256: f327a74f9c752c12a983043f325d75445a29778212faf0cab2ad5ef66dc4857d
   md5: c07aaa255e38c55d5f92e667596e4b6f

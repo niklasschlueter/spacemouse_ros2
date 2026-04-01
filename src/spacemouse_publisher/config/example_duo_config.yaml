@@ -26,10 +26,18 @@ LEFT:
   linear_snap_threshold: 0.15
   angular_snap_threshold: 0.15
   timer_period: 0.01
+  gripper_interface: "action"
   gripper_topic: "space_mouse/target_gripper_width_percent"
+  gripper_action: "manipulators/arm_0_gripper_controller/gripper_cmd"
+  gripper_max_position: 0.8
+  gripper_max_effort: 50.0
   gripper_mode: "absolute"
   gripper_step: 0.01
+  gripper_interface: "action"
   gripper_topic: "space_mouse/target_gripper_width_percent"
+  gripper_action: "manipulators/arm_0_gripper_controller/gripper_cmd"
+  gripper_max_position: 0.8
+  gripper_max_effort: 50.0
   gripper_mode: "absolute"
   gripper_step: 0.01
 
@@ -55,6 +63,10 @@ RIGHT:
   linear_snap_threshold: 0.15
   angular_snap_threshold: 0.15
   timer_period: 0.01
+  gripper_interface: "action"
   gripper_topic: "space_mouse/target_gripper_width_percent"
+  gripper_action: "manipulators/arm_0_gripper_controller/gripper_cmd"
+  gripper_max_position: 0.8
+  gripper_max_effort: 50.0
   gripper_mode: "absolute"
   gripper_step: 0.01

@@ -1,6 +1,6 @@
 # spacemouse_ros2
 
-ROS 2 package for teleoperation with a 3Dconnexion SpaceMouse. Reads 6-DOF device input and publishes a continuously integrated `PoseStamped` target that a robot controller can track.
+A minimal ROS 2 package that maps 3Dconnexion SpaceMouse input to ROS 2 topics. It publishes a continuously integrated `PoseStamped` target and optional gripper commands — nothing more. It assumes you have your own tracking controller that follows the target pose, and optionally a gripper controller that acts on the gripper topic.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ Two nodes run together per robot:
 SpaceMouse device
       │  (HID)
       ▼
-pyspacemouse_publisher          publishes Twist at 100 Hz
+pyspacemouse_publisher          publishes Twist at 100 Hz + gripper commands
       │  space_mouse/target_cartesian_velocity_percent
       ▼
 twist_to_pose_node              integrates Twist → PoseStamped, clips, snaps
@@ -21,7 +21,7 @@ Robot controller
       └──────────────────────────────► twist_to_pose_node (feedback loop)
 ```
 
-**`pyspacemouse_publisher`** — reads the SpaceMouse via the `pyspacemouse` library and publishes raw 6-DOF velocity as a `geometry_msgs/Twist`. Button 1 opens the gripper (publishes `0.0` on `space_mouse/target_gripper_width_percent`), Button 2 closes it (`1.0`).
+**`pyspacemouse_publisher`** — reads the SpaceMouse via the `pyspacemouse` library and publishes raw 6-DOF velocity as a `geometry_msgs/Twist`. The two buttons control a gripper topic (`std_msgs/Float32`) in either absolute mode (one press = fully open/close) or relative mode (hold to gradually open/close). See [Gripper parameters](#parameter-reference) for details.
 
 **`twist_to_pose_node`** — subscribes to the Twist and integrates it into a `PoseStamped` target. On startup it seeds the target from the first `/current_pose` message so there is no jump. Features:
 - Configurable input frame (world or EE-relative) for translation and rotation independently
@@ -33,6 +33,20 @@ Robot controller
 ---
 
 ## Prerequisites
+
+### udev rule (one-time setup)
+
+By default, `/dev/hidraw*` devices are root-only on Linux. Add a udev rule so the SpaceMouse is accessible without sudo:
+
+```bash
+printf 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", MODE="0666"\nSUBSYSTEM=="hidraw", ATTRS{idVendor}=="256f", MODE="0666"\n' \
+  | sudo tee /etc/udev/rules.d/99-spacemouse.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+`046d` and `256f` are the two vendor IDs used across all 3Dconnexion devices. Replug the SpaceMouse after running this.
+
+### Pixi
 
 [Pixi](https://pixi.sh) is used to manage the ROS 2 Jazzy environment and Python dependencies. All dependencies are declared in `pyproject.toml`.
 
@@ -93,13 +107,33 @@ By default this launches with `example_config.yaml`. Pass a different config:
 pixi run start config_file:=my_robot_config.yaml
 ```
 
+Or launch directly with ros2:
+
+```bash
+source install/setup.bash
+ros2 launch spacemouse_publisher spacemouse_publisher.launch.py config_file:=my_robot_config.yaml
+```
+
 ---
 
 ## Configuration
 
-Create a YAML file in `src/spacemouse_publisher/config/` (or copy one of the examples). Pass its filename via the `config_file` launch argument.
+The easiest starting point is to edit `example_config.yaml` directly. If you want a separate file, copy it, rename it, and pass the filename via `config_file`. Place it in `src/spacemouse_publisher/config/`.
 
-Each top-level key in the file defines one SpaceMouse + integrator pair. Multiple keys launch multiple pairs (e.g. for a dual-arm setup).
+Each top-level key defines one SpaceMouse + integrator pair. Multiple keys launch multiple pairs (e.g. for a dual-arm setup). All parameters are optional except `namespace` and `device_path`.
+
+### Adapting to your robot
+
+Four things typically need to change:
+
+| What | Parameter | Notes |
+|---|---|---|
+| ROS namespace | `namespace` | Must match your robot controller's namespace (e.g. `r100_0207`). Leave empty if your controller runs in the global namespace. |
+| Pose topics | `current_pose_topic`, `target_pose_topic` | Set to the topics your controller publishes/subscribes. The node seeds its target from `current_pose_topic` on startup. |
+| SpaceMouse device | `device_path` | Only needed with multiple connected devices. Leave empty to auto-detect. |
+| Gripper | `gripper_interface`, `gripper_action` / `gripper_topic` | Set `gripper_interface: "action"` and point `gripper_action` at your gripper controller's action server. If your gripper uses a different joint range, adjust `gripper_max_position`. Set `gripper_interface: "topic"` if you have your own bridge node. |
+
+Everything else (sensitivity, deadband, clipping, snap) has sensible defaults and can be tuned later.
 
 ### Identify connected SpaceMouse devices
 
@@ -122,9 +156,9 @@ Example output: `/sys/class/hidraw/hidraw1/device/uevent:HID_NAME=3Dconnexion Sp
 | `device_path` | string | `""` | HID path of the SpaceMouse (e.g. `/dev/hidraw1`). Empty = auto-detect first device. |
 | `operator_position_front` | bool | `true` | `true` if the operator faces the front of the robot base. `false` inverts X/Y so "push forward" always means away from the operator. |
 | `input_frame_rpy` | float[3] | `[0, 0, 0]` | Rotation `[roll, pitch, yaw]` in degrees (intrinsic ZYX) applied to all SpaceMouse inputs before EE/world-frame processing. Compensates for operator orientation (e.g. sitting 90° to the side: `[0, 0, 90]`) or non-standard tool mounting. |
-| `flip_input_x` | bool | `false` | Invert the SpaceMouse X axis after `input_frame_rpy`. Independent of right-hand convention — any single axis can be flipped alone. |
+| `flip_input_x` | bool | `false` | Invert the SpaceMouse X axis after `input_frame_rpy`. Any single axis can be flipped independently. |
 | `flip_input_y` | bool | `false` | Invert the Y axis. |
-| `flip_input_z` | bool | `false` | Invert the Z axis (push-down = positive Z). Direct replacement for the removed `invert_linear_z`. |
+| `flip_input_z` | bool | `false` | Invert the Z axis. |
 | **Topics** | | | |
 | `current_pose_topic` | string | `"/current_pose"` | Topic the robot publishes its actual EE pose on (`geometry_msgs/PoseStamped`). |
 | `target_pose_topic` | string | `"/target_pose"` | Topic this node publishes the commanded target pose on (`geometry_msgs/PoseStamped`). |
@@ -145,9 +179,13 @@ Example output: `/sys/class/hidraw/hidraw1/device/uevent:HID_NAME=3Dconnexion Sp
 | `linear_snap_threshold` | float | `0.15` | Raw input (0–1) below which a translational axis is considered idle for the snap check. Set higher than `linear_deadzone` so the snap fires while the knob is still returning to center, not after full mechanical settle. |
 | `angular_snap_threshold` | float | `0.15` | Same as `linear_snap_threshold` but for rotational axes. |
 | **Gripper** | | | |
-| `gripper_topic` | string | `"space_mouse/target_gripper_width_percent"` | Topic for gripper commands (`std_msgs/Float32`, range 0–1). |
+| `gripper_interface` | string | `"action"` | `"topic"`: publishes `std_msgs/Float32` (0–1) to `gripper_topic`. `"action"`: sends `control_msgs/action/GripperCommand` goals directly to the gripper action server. |
 | `gripper_mode` | string | `"absolute"` | `"absolute"`: one press fully opens (Button 1 → 0.0) or closes (Button 2 → 1.0). `"relative"`: hold Button 1 to open, hold Button 2 to close; release stops movement. |
 | `gripper_step` | float | `0.01` | Width step per timer tick in `"relative"` mode. At 100 Hz: `0.01` → ~1 s full travel. |
+| `gripper_topic` | string | `"space_mouse/target_gripper_width_percent"` | Topic name for `"topic"` mode. |
+| `gripper_action` | string | `"manipulators/arm_0_gripper_controller/gripper_cmd"` | Action server name for `"action"` mode. |
+| `gripper_max_position` | float | `0.8` | Fully-closed joint position in radians for `"action"` mode. `0.8` = Robotiq 2F-85. |
+| `gripper_max_effort` | float | `50.0` | Max effort sent with each `GripperCommand` goal in `"action"` mode. |
 | **Timing** | | | |
 | `timer_period` | float | `0.01` | Integration loop period (seconds). Default 0.01 s = 100 Hz, matching the SpaceMouse publisher rate. |
 
