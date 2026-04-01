@@ -1,4 +1,5 @@
 import os
+
 import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
@@ -34,11 +35,7 @@ def generate_nodes(context):
                 namespace=namespace,
                 output="screen",
                 parameters=[
-                    {
-                        "operator_position_front": config.get(
-                            "operator_position_front", True
-                        )
-                    },
+                    {"operator_position_front": config.get("operator_position_front", True)},
                     {"device_path": str(config.get("device_path", ""))},
                     *(
                         [{"gripper_topic": str(config["gripper_topic"])}]

@@ -1,8 +1,8 @@
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32
 import pyspacemouse
+import rclpy
+from geometry_msgs.msg import Twist
+from rclpy.node import Node
+from std_msgs.msg import Float32
 
 
 class SpaceMousePublisher(Node):
@@ -21,28 +21,18 @@ class SpaceMousePublisher(Node):
 
         self.declare_parameter("operator_position_front", True)
         self._operator_position_front = (
-            self.get_parameter("operator_position_front")
-            .get_parameter_value()
-            .bool_value
+            self.get_parameter("operator_position_front").get_parameter_value().bool_value
         )
-        self.get_logger().info(
-            f"Operator position front: {self._operator_position_front}"
-        )
+        self.get_logger().info(f"Operator position front: {self._operator_position_front}")
 
         self.declare_parameter("device_path", "")
-        self._device_path = (
-            self.get_parameter("device_path").get_parameter_value().string_value
-        )
+        self._device_path = self.get_parameter("device_path").get_parameter_value().string_value
 
         self.declare_parameter("gripper_mode", "absolute")
-        self._gripper_mode = (
-            self.get_parameter("gripper_mode").get_parameter_value().string_value
-        )
+        self._gripper_mode = self.get_parameter("gripper_mode").get_parameter_value().string_value
 
         self.declare_parameter("gripper_step", 0.01)
-        self._gripper_step = (
-            self.get_parameter("gripper_step").get_parameter_value().double_value
-        )
+        self._gripper_step = self.get_parameter("gripper_step").get_parameter_value().double_value
 
         self.declare_parameter("gripper_interface", "action")
         self._gripper_interface = (
@@ -60,33 +50,26 @@ class SpaceMousePublisher(Node):
         )
 
         if self._gripper_interface == "action":
-            from rclpy.action import ActionClient
             from control_msgs.action import GripperCommand
+            from rclpy.action import ActionClient
 
-            self.declare_parameter("gripper_action", "manipulators/arm_0_gripper_controller/gripper_cmd")
-            gripper_action = (
-                self.get_parameter("gripper_action").get_parameter_value().string_value
-            )
+            default_action = "manipulators/arm_0_gripper_controller/gripper_cmd"
+            self.declare_parameter("gripper_action", default_action)
+            gripper_action = self.get_parameter("gripper_action").get_parameter_value().string_value
             self.declare_parameter("gripper_max_position", 0.8)
             self._gripper_max_position = (
-                self.get_parameter("gripper_max_position")
-                .get_parameter_value()
-                .double_value
+                self.get_parameter("gripper_max_position").get_parameter_value().double_value
             )
             self.declare_parameter("gripper_max_effort", 50.0)
             self._gripper_max_effort = (
-                self.get_parameter("gripper_max_effort")
-                .get_parameter_value()
-                .double_value
+                self.get_parameter("gripper_max_effort").get_parameter_value().double_value
             )
             self._GripperCommand = GripperCommand
             self._gripper_action_client = ActionClient(self, GripperCommand, gripper_action)
             self.get_logger().info(f"Gripper action client: {gripper_action}")
         else:
             self.declare_parameter("gripper_topic", "space_mouse/target_gripper_width_percent")
-            gripper_topic = (
-                self.get_parameter("gripper_topic").get_parameter_value().string_value
-            )
+            gripper_topic = self.get_parameter("gripper_topic").get_parameter_value().string_value
             self._gripper_publisher = self.create_publisher(Float32, gripper_topic, 10)
             self.get_logger().info(f"Gripper topic: {gripper_topic}")
 

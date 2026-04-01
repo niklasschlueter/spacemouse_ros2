@@ -9,7 +9,7 @@ on:
     - cron: "0 0 * * 0"
 
 jobs:
-  build-and-test:
+  build-and-lint:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,5 +23,5 @@ jobs:
       - name: Build
         run: pixi run build
 
-      - name: Test
-        run: pixi run --environment default -- bash -c 'source install/setup.bash && colcon test && colcon test-result --verbose'
+      - name: Lint
+        run: pixi run lint

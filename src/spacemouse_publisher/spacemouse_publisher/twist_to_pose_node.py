@@ -1,7 +1,8 @@
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist, PoseStamped
 import math
+
+import rclpy
+from geometry_msgs.msg import PoseStamped, Twist
+from rclpy.node import Node
 
 
 class TwistToPoseNode(Node):
@@ -23,17 +24,17 @@ class TwistToPoseNode(Node):
         self.get_logger().info("Initializing Twist-to-Pose Integrator...")
 
         # Sensitivity
-        self.declare_parameter("linear_scale", 0.1)    # m/s sensitivity
+        self.declare_parameter("linear_scale", 0.1)  # m/s sensitivity
         self.declare_parameter("angular_scale", 0.25)  # rad/s sensitivity
 
         # Deadband — input must exceed this before any motion is applied;
         # once exceeded the threshold is subtracted so motion starts smoothly from zero.
-        self.declare_parameter("linear_deadzone", 0.05)   # fraction of full input range
+        self.declare_parameter("linear_deadzone", 0.05)  # fraction of full input range
         self.declare_parameter("angular_deadzone", 0.05)  # fraction of full input range
 
         # Clipping — maximum deviation of target from actual pose
         self.declare_parameter("max_distance", 0.15)  # translational clip (m)
-        self.declare_parameter("max_rotation", 0.5)   # rotational clip (rad)
+        self.declare_parameter("max_rotation", 0.5)  # rotational clip (rad)
 
         # Snap target back to actual pose when all inputs are idle.
         # snap_threshold controls when "idle" is declared — inputs below this trigger
@@ -213,12 +214,22 @@ class TwistToPoseNode(Node):
             # 3b. Apply input frame rotation and per-axis flips
             if self._input_qw < 1.0:  # skip if identity quaternion
                 lx, ly, lz = self._rotate_vector_by_quaternion(
-                    lx, ly, lz,
-                    self._input_qx, self._input_qy, self._input_qz, self._input_qw,
+                    lx,
+                    ly,
+                    lz,
+                    self._input_qx,
+                    self._input_qy,
+                    self._input_qz,
+                    self._input_qw,
                 )
                 ax, ay, az = self._rotate_vector_by_quaternion(
-                    ax, ay, az,
-                    self._input_qx, self._input_qy, self._input_qz, self._input_qw,
+                    ax,
+                    ay,
+                    az,
+                    self._input_qx,
+                    self._input_qy,
+                    self._input_qz,
+                    self._input_qw,
                 )
             if self._flip_input_x:
                 lx, ax = -lx, -ax
@@ -230,13 +241,23 @@ class TwistToPoseNode(Node):
             # 4. Rotate into world frame if EE-relative mode is active
             if self.translation_frame == "ee":
                 lx, ly, lz = self._rotate_vector_by_quaternion(
-                    lx, ly, lz,
-                    self.actual_qx, self.actual_qy, self.actual_qz, self.actual_qw,
+                    lx,
+                    ly,
+                    lz,
+                    self.actual_qx,
+                    self.actual_qy,
+                    self.actual_qz,
+                    self.actual_qw,
                 )
             if self.rotation_frame == "ee":
                 ax, ay, az = self._rotate_vector_by_quaternion(
-                    ax, ay, az,
-                    self.actual_qx, self.actual_qy, self.actual_qz, self.actual_qw,
+                    ax,
+                    ay,
+                    az,
+                    self.actual_qx,
+                    self.actual_qy,
+                    self.actual_qz,
+                    self.actual_qw,
                 )
 
             # 5. Integrate translation
@@ -250,8 +271,14 @@ class TwistToPoseNode(Node):
             # Apply world-frame rotation: q_new = dq * q_target
             self.target_qx, self.target_qy, self.target_qz, self.target_qw = (
                 self._quaternion_multiply(
-                    dqx, dqy, dqz, dqw,
-                    self.target_qx, self.target_qy, self.target_qz, self.target_qw,
+                    dqx,
+                    dqy,
+                    dqz,
+                    dqw,
+                    self.target_qx,
+                    self.target_qy,
+                    self.target_qz,
+                    self.target_qw,
                 )
             )
             # Keep target quaternion normalised
@@ -274,12 +301,18 @@ class TwistToPoseNode(Node):
                 self.target_z = self.actual_z + (self.target_z - self.actual_z) * scale_factor
 
             # 8. Apply rotational clip (quaternion-space, avoids wrapping)
-            (
-                self.target_qx, self.target_qy, self.target_qz, self.target_qw
-            ) = self._clip_rotation_to_actual(
-                self.target_qx, self.target_qy, self.target_qz, self.target_qw,
-                self.actual_qx, self.actual_qy, self.actual_qz, self.actual_qw,
-                self.max_rotation,
+            (self.target_qx, self.target_qy, self.target_qz, self.target_qw) = (
+                self._clip_rotation_to_actual(
+                    self.target_qx,
+                    self.target_qy,
+                    self.target_qz,
+                    self.target_qw,
+                    self.actual_qx,
+                    self.actual_qy,
+                    self.actual_qz,
+                    self.actual_qw,
+                    self.max_rotation,
+                )
             )
 
         # 9. Publish the target pose
@@ -350,8 +383,14 @@ class TwistToPoseNode(Node):
         """Clip target quaternion so its angular distance from actual does not exceed max_angle."""
         # Relative rotation: dq = q_target * q_actual_conj
         dqx, dqy, dqz, dqw = self._quaternion_multiply(
-            tqx, tqy, tqz, tqw,
-            -aqx, -aqy, -aqz, aqw,  # conjugate of actual (unit quat)
+            tqx,
+            tqy,
+            tqz,
+            tqw,
+            -aqx,
+            -aqy,
+            -aqz,
+            aqw,  # conjugate of actual (unit quat)
         )
         dqx, dqy, dqz, dqw = self._quaternion_normalize(dqx, dqy, dqz, dqw)
 

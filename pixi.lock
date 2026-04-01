@@ -245,6 +245,7 @@ environments:
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-uncrustify-vendor-3.0.1-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros-jazzy-unique-identifier-msgs-2.5.0-np2py312h2ed9cc7_16.conda
       - conda: https://conda.anaconda.org/robostack-jazzy/linux-64/ros2-distro-mutex-0.14.0-jazzy_16.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.15.8-h7805a7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-79.0.1-pyhff2d567_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/six-1.17.0-pyhe01879c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/snowballstemmer-3.0.1-pyhd8ed1ab_0.conda
@@ -4268,6 +4269,22 @@ packages:
   license: BSD-3-Clause
   size: 2334
   timestamp: 1771181243372
+- conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.15.8-h7805a7d_0.conda
+  noarch: python
+  sha256: c4778a348a99b781585f8ef47f134a5ebfe205f9f403ecd601fc602efa7e54ce
+  md5: 67bed7148b00f10bd30766cb58fb8f6f
+  depends:
+  - python
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/ruff?source=compressed-mapping
+  size: 9233459
+  timestamp: 1774602134378
 - conda: https://conda.anaconda.org/conda-forge/noarch/setuptools-79.0.1-pyhff2d567_0.conda
   sha256: 5ebc4bb71fbdc8048b08848519150c8d44b8eb18445711d3258c9d402ba87a2c
   md5: fa6669cc21abd4b7b6c5393b7bc71914

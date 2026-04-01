@@ -29,6 +29,7 @@ ros-jazzy-ros2topic = "*"
 ros-jazzy-ros2launch = "*"
 colcon-common-extensions = "*"
 ros-jazzy-control-msgs = "*"
+ruff = "*"
 
 # C library required by pyspacemouse (HID communication)
 hidapi = "*"
@@ -38,3 +39,11 @@ libhidapi = "*"
 build = "colcon build --symlink-install"
 clean = "rm -rf build/ install/ log/"
 start = "bash -c 'source install/setup.bash && ros2 launch spacemouse_publisher spacemouse_publisher.launch.py $*' --"
+lint = "ruff check src/ && ruff format --check src/"
+format = "ruff format src/"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
