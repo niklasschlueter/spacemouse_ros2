@@ -34,15 +34,11 @@ def pose_integrator_params(config):
     """Extract optional tuning parameters for the twist_to_pose_node."""
     params = {}
     for key, cast in [
-        ("linear_scale", float),
-        ("angular_scale", float),
         ("linear_deadzone", float),
         ("angular_deadzone", float),
         ("max_distance", float),
         ("max_rotation", float),
-        ("snap_to_actual_on_idle", bool),
-        ("linear_snap_threshold", float),
-        ("angular_snap_threshold", float),
+        ("latch_on_idle", bool),
         ("timer_period", float),
         ("translation_frame", str),
         ("rotation_frame", str),

@@ -15,7 +15,7 @@ SpaceMouse device
 pyspacemouse_publisher          publishes Twist at 100 Hz + gripper commands
       │  space_mouse/target_cartesian_velocity_percent
       ▼
-twist_to_pose_node              integrates Twist → PoseStamped, clips, snaps
+twist_to_pose_node              maps Twist → PoseStamped offset from actual
       │  /target_pose  (configurable)
       ▼
 Robot controller
@@ -25,11 +25,10 @@ Robot controller
 
 **`pyspacemouse_publisher`** — reads the SpaceMouse via the `pyspacemouse` library and publishes raw 6-DOF velocity as a `geometry_msgs/Twist`. The two buttons control a gripper topic (`std_msgs/Float32`) in either absolute mode (one press = fully open/close) or relative mode (hold to gradually open/close). See [Gripper parameters](#parameter-reference) for details.
 
-**`twist_to_pose_node`** — subscribes to the Twist and integrates it into a `PoseStamped` target. On startup it seeds the target from the first `/current_pose` message so there is no jump. Features:
+**`twist_to_pose_node`** — subscribes to the Twist and maps it to a `PoseStamped` target offset from the robot's actual pose. SpaceMouse deflection maps directly to an offset: zero input = target at actual pose (no lag on release). Features:
+- Direct offset mapping — no integration, no accumulated state
 - Configurable input frame (world or EE-relative) for translation and rotation independently
 - Per-axis deadband with smooth onset (threshold subtracted, no step)
-- Safety clipping: target cannot lead the actual pose by more than `max_distance` (m) or `max_rotation` (rad)
-- Idle snap: target snaps back to actual pose as soon as inputs fall below `linear/angular_snap_threshold`
 - Full quaternion orientation tracking — no gimbal lock or Euler wrapping discontinuities
 
 ---
@@ -173,19 +172,12 @@ Example output:
 | **Input frame** | | | |
 | `translation_frame` | string | `"ee"` | `"world"`: push forward → world +X. `"ee"`: push forward → EE's pointing direction. |
 | `rotation_frame` | string | `"ee"` | `"world"`: rotate around world axes. `"ee"`: rotate around the EE's local axes. |
-| **Sensitivity** | | | |
-| `linear_scale` | float | `0.1` | Translational speed at full SpaceMouse deflection (m/s). |
-| `angular_scale` | float | `0.25` | Rotational speed at full SpaceMouse deflection (rad/s). |
+| **Max offset** | | | |
+| `max_distance` | float | `0.15` | Maximum translational offset (m) from actual EE at full SpaceMouse deflection. |
+| `max_rotation` | float | `0.5` | Maximum angular offset (rad, ≈28°) from actual EE at full deflection. |
 | **Deadband** | | | |
 | `linear_deadzone` | float | `0.05` | Raw input fraction (0–1) that must be exceeded before translation starts. Inputs above have the threshold subtracted so motion begins at zero with no step. |
 | `angular_deadzone` | float | `0.05` | Same as `linear_deadzone` but for rotation. |
-| **Safety clipping** | | | |
-| `max_distance` | float | `0.15` | Maximum Euclidean distance (m) the target may lead the actual EE. The target is projected back to the boundary sphere if exceeded. |
-| `max_rotation` | float | `0.5` | Maximum angular distance (rad, ≈28°) the target orientation may lead the actual EE orientation. Clipped in quaternion space. |
-| **Idle snap** | | | |
-| `snap_to_actual_on_idle` | bool | `true` | When `true`, the target snaps instantly back to the actual EE pose when all inputs are idle. Prevents residual offsets after releasing the device. |
-| `linear_snap_threshold` | float | `0.15` | Raw input (0–1) below which a translational axis is considered idle for the snap check. Set higher than `linear_deadzone` so the snap fires while the knob is still returning to center, not after full mechanical settle. |
-| `angular_snap_threshold` | float | `0.15` | Same as `linear_snap_threshold` but for rotational axes. |
 | **Gripper** | | | |
 | `gripper_interface` | string | `"action"` | `"topic"`: publishes `std_msgs/Float32` (0–1) to `gripper_topic`. `"action"`: sends `control_msgs/action/GripperCommand` goals directly to the gripper action server. |
 | `gripper_mode` | string | `"absolute"` | `"absolute"`: one press fully opens (Button 1 → 0.0) or closes (Button 2 → 1.0). `"relative"`: hold Button 1 to open, hold Button 2 to close; release stops movement. |
@@ -195,7 +187,7 @@ Example output:
 | `gripper_max_position` | float | `0.8` | Fully-closed joint position in radians for `"action"` mode. `0.8` = Robotiq 2F-85. |
 | `gripper_max_effort` | float | `50.0` | Max effort sent with each `GripperCommand` goal in `"action"` mode. |
 | **Timing** | | | |
-| `timer_period` | float | `0.01` | Integration loop period (seconds). Default 0.01 s = 100 Hz, matching the SpaceMouse publisher rate. |
+| `timer_period` | float | `0.01` | Loop period (seconds). Default 0.01 s = 100 Hz, matching the SpaceMouse publisher rate. |
 
 ---
 

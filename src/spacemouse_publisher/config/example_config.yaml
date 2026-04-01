@@ -28,7 +28,6 @@ robot1:
   input_frame_rpy: [0.0, 0.0, 0.0]
 
   # Per-axis sign flips applied after input_frame_rpy (no right-hand constraint).
-  # flip_input_z: true  →  push-down = positive Z (replaces old invert_linear_z).
   flip_input_x: false
   flip_input_y: false
   flip_input_z: false
@@ -53,89 +52,47 @@ robot1:
   #   "ee"    — rotating the puck tilts the EE around its own local axes.
   rotation_frame: "world"
 
-  # ── Sensitivity ────────────────────────────────────────────────────────────
+  # ── Max offset ─────────────────────────────────────────────────────────────
 
-  # Translational speed scale. SpaceMouse output (range [-1, 1]) is multiplied
-  # by this value and the integration timestep to produce a position delta per
-  # cycle. Unit: m/s at full deflection.
-  linear_scale: 0.35
+  # SpaceMouse deflection maps directly to a pose offset from the actual EE.
+  # Full deflection → max offset. Zero input → target at actual pose (no lag).
 
-  # Rotational speed scale. Same principle as linear_scale.
-  # Unit: rad/s at full deflection.
-  angular_scale: 1.0
+  # Maximum translational offset (m) at full SpaceMouse deflection.
+  max_distance: 0.15
+
+  # Maximum angular offset (rad) at full SpaceMouse deflection (~0.5 rad ≈ 28°).
+  max_rotation: 0.5
 
   # ── Deadband ───────────────────────────────────────────────────────────────
 
-  # Minimum raw translational input (in the [-1, 1] range) required before any
-  # motion is applied. Inputs below this are ignored; inputs above have the
-  # threshold subtracted so motion starts smoothly from zero (no jump).
+  # Minimum raw input (in the [-1, 1] range) required before any motion is
+  # applied. Inputs below this are ignored; inputs above have the threshold
+  # subtracted so motion starts smoothly from zero (no jump).
   linear_deadzone: 0.0
 
   # Same as linear_deadzone but for rotational axes.
   angular_deadzone: 0.0
 
-  # ── Safety clipping ────────────────────────────────────────────────────────
-
-  # Maximum Euclidean distance (m) the target position may lead the actual EE
-  # position. If exceeded, the target is projected back onto the boundary
-  # sphere. This prevents runaway targets if the robot is slow to follow.
-  max_distance: 0.15
-
-  # Maximum angular distance (rad) the target orientation may lead the actual
-  # EE orientation. Clipped in quaternion space (no gimbal-lock issues).
-  # ~0.5 rad ≈ 28°.
-  max_rotation: 0.5
-
-  # ── Idle snap ──────────────────────────────────────────────────────────────
-
-  # When true, the target pose snaps back to the actual EE pose as soon as all
-  # inputs are considered idle (see *_snap_threshold below). This ensures the
-  # robot settles at its real position when you let go.
-  snap_to_actual_on_idle: true
-
-  # Raw translational input ([-1, 1]) below which an axis is considered idle
-  # for the snap check. Set higher than linear_deadzone so the snap triggers
-  # while the SpaceMouse knob is still physically springing back to center,
-  # rather than waiting for it to fully settle.
-  linear_snap_threshold: 0.15
-
-  # Same as linear_snap_threshold but for rotational axes.
-  angular_snap_threshold: 0.15
-
   # ── Gripper ────────────────────────────────────────────────────────────────
 
   # How gripper commands are sent:
   #   "topic"  — publishes std_msgs/Float32 (range 0–1) to gripper_topic.
-  #              Requires a bridge node to forward to the actual gripper controller.
-  #   "action" — sends control_msgs/action/GripperCommand goals directly to the
-  #              gripper action server (e.g. ros2_control GripperActionController).
-  # How gripper commands are sent:
-  #   "topic"  — publishes std_msgs/Float32 (range 0–1) to gripper_topic.
-  #              Requires a bridge node to forward to the actual gripper controller.
   #   "action" — sends control_msgs/action/GripperCommand goals directly to the
   #              gripper action server (e.g. ros2_control GripperActionController).
   gripper_interface: "action"
 
-  # ── Topic mode ─────────────────────────────────────────────────────────────
-
-  # Topic on which gripper commands are published (std_msgs/Float32, range 0–1).
-  # Only used when gripper_interface is "topic".
+  # Topic on which gripper commands are published (topic mode only).
   gripper_topic: "space_mouse/target_gripper_width_percent"
 
-  # ── Action mode ────────────────────────────────────────────────────────────
-
-  # Action server name for the gripper controller.
-  # Only used when gripper_interface is "action".
+  # Action server name for the gripper controller (action mode only).
   gripper_action: "manipulators/arm_0_gripper_controller/gripper_cmd"
 
-  # Gripper joint position (radians) corresponding to fully closed (Float32 = 1.0).
+  # Gripper joint position (radians) corresponding to fully closed.
   # Robotiq 2F-85: 0.8 rad. Adjust for your gripper model.
   gripper_max_position: 0.8
 
-  # Maximum effort sent with every GripperCommand goal (N or Nm, gripper-dependent).
+  # Maximum effort sent with every GripperCommand goal.
   gripper_max_effort: 50.0
-
-  # ── Shared ─────────────────────────────────────────────────────────────────
 
   # Gripper button mode:
   #   "absolute" — one press fully opens (Button 1 → 0.0) or closes (Button 2 → 1.0).
@@ -143,11 +100,11 @@ robot1:
   gripper_mode: "absolute"
 
   # Gripper width step per timer tick in relative mode (range 0–1).
-  # At 100 Hz (timer_period 0.01): 0.01 → ~1 s full travel, 0.005 → ~2 s full travel.
+  # At 100 Hz: 0.01 → ~1 s full travel, 0.005 → ~2 s full travel.
   gripper_step: 0.01
 
   # ── Timing ─────────────────────────────────────────────────────────────────
 
-  # Integration loop period in seconds (1 / Hz). Should match or be faster
-  # than the SpaceMouse publisher rate (default 100 Hz = 0.01 s).
+  # Loop period in seconds (1 / Hz). Should match or be faster than the
+  # SpaceMouse publisher rate (default 100 Hz = 0.01 s).
   timer_period: 0.01

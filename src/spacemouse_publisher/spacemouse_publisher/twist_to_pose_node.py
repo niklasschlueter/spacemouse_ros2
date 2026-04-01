@@ -6,14 +6,13 @@ from rclpy.node import Node
 
 
 class TwistToPoseNode(Node):
-    """
-    Integrates Twist velocities into a target PoseStamped.
-    The target is seeded from /current_pose on first receipt, so spacemouse
-    inputs are applied as deltas relative to the robot's actual pose.
-    Caps the maximum translation distance and rotation relative to the actual pose.
+    """Maps SpaceMouse input directly to a target pose offset from the actual EE pose.
 
-    Orientation is tracked as a quaternion throughout to avoid gimbal lock and
-    Euler angle wrapping discontinuities.
+    SpaceMouse deflection [-1, 1] maps linearly to an offset within max_distance (m)
+    and max_rotation (rad) from the robot's current pose. Zero input = target at actual
+    pose. No integration, no accumulated state.
+
+    Orientation is handled in quaternion space to avoid gimbal lock.
 
     The frame for translation and rotation inputs is configurable:
       translation_frame / rotation_frame: "world" (base frame) or "ee" (EE frame).
@@ -21,30 +20,22 @@ class TwistToPoseNode(Node):
 
     def __init__(self):
         super().__init__("twist_to_pose_node")
-        self.get_logger().info("Initializing Twist-to-Pose Integrator...")
-
-        # Sensitivity
-        self.declare_parameter("linear_scale", 0.1)  # m/s sensitivity
-        self.declare_parameter("angular_scale", 0.25)  # rad/s sensitivity
+        self.get_logger().info("Initializing Twist-to-Pose node...")
 
         # Deadband — input must exceed this before any motion is applied;
         # once exceeded the threshold is subtracted so motion starts smoothly from zero.
-        self.declare_parameter("linear_deadzone", 0.05)  # fraction of full input range
-        self.declare_parameter("angular_deadzone", 0.05)  # fraction of full input range
+        self.declare_parameter("linear_deadzone", 0.05)
+        self.declare_parameter("angular_deadzone", 0.05)
 
-        # Clipping — maximum deviation of target from actual pose
-        self.declare_parameter("max_distance", 0.15)  # translational clip (m)
-        self.declare_parameter("max_rotation", 0.5)  # rotational clip (rad)
+        # Max offset from actual pose at full SpaceMouse deflection
+        self.declare_parameter("max_distance", 0.15)  # meters
+        self.declare_parameter("max_rotation", 0.5)  # radians
 
-        # Snap target back to actual pose when all inputs are idle.
-        # snap_threshold controls when "idle" is declared — inputs below this trigger
-        # the snap. Set higher than linear/angular_deadzone so the snap fires early
-        # as the device springs back to center, rather than waiting for full settle.
-        self.declare_parameter("snap_to_actual_on_idle", True)
-        self.declare_parameter("linear_snap_threshold", 0.15)
-        self.declare_parameter("angular_snap_threshold", 0.15)
+        # When true, the target freezes at the actual pose on release (stable setpoint).
+        # When false, the target continuously tracks the actual pose while idle.
+        self.declare_parameter("latch_on_idle", True)
 
-        self.declare_parameter("timer_period", 0.01)  # 100Hz integration loop
+        self.declare_parameter("timer_period", 0.01)  # 100Hz
 
         # "world" or "ee" — frame in which spacemouse inputs are interpreted
         self.declare_parameter("translation_frame", "ee")
@@ -54,23 +45,17 @@ class TwistToPoseNode(Node):
         self.declare_parameter("current_pose_topic", "/current_pose")
         self.declare_parameter("target_pose_topic", "/target_pose")
 
-        # Input frame mapping — applied to SpaceMouse inputs before EE/world-frame processing.
-        # input_frame_rpy rotates the input frame (intrinsic ZYX, degrees).
-        # flip_input_* inverts individual axes after the rotation (no right-hand constraint).
+        # Input frame mapping
         self.declare_parameter("input_frame_rpy", [0.0, 0.0, 0.0])
         self.declare_parameter("flip_input_x", False)
         self.declare_parameter("flip_input_y", False)
         self.declare_parameter("flip_input_z", False)
 
-        self.linear_scale = self.get_parameter("linear_scale").value
-        self.angular_scale = self.get_parameter("angular_scale").value
         self.linear_deadzone = self.get_parameter("linear_deadzone").value
         self.angular_deadzone = self.get_parameter("angular_deadzone").value
         self.max_distance = self.get_parameter("max_distance").value
         self.max_rotation = self.get_parameter("max_rotation").value
-        self.snap_to_actual_on_idle = self.get_parameter("snap_to_actual_on_idle").value
-        self.linear_snap_threshold = self.get_parameter("linear_snap_threshold").value
-        self.angular_snap_threshold = self.get_parameter("angular_snap_threshold").value
+        self._latch_on_idle = self.get_parameter("latch_on_idle").value
         self.dt = self.get_parameter("timer_period").value
         self.translation_frame = self.get_parameter("translation_frame").value
         self.rotation_frame = self.get_parameter("rotation_frame").value
@@ -84,16 +69,7 @@ class TwistToPoseNode(Node):
         self._flip_input_y = self.get_parameter("flip_input_y").value
         self._flip_input_z = self.get_parameter("flip_input_z").value
 
-        # Integrated target pose — position and quaternion orientation
-        self.target_x = 0.0
-        self.target_y = 0.0
-        self.target_z = 0.0
-        self.target_qx = 0.0
-        self.target_qy = 0.0
-        self.target_qz = 0.0
-        self.target_qw = 1.0
-
-        # Robot's actual pose — position and quaternion orientation
+        # Robot's actual pose
         self.actual_x = 0.0
         self.actual_y = 0.0
         self.actual_z = 0.0
@@ -102,11 +78,16 @@ class TwistToPoseNode(Node):
         self.actual_qz = 0.0
         self.actual_qw = 1.0
 
-        # Whether the target has been seeded from current_pose yet
         self._pose_initialized = False
-
-        # Latest Twist commands
         self.current_twist = Twist()
+        self._was_active = False
+        self._latched_x = 0.0
+        self._latched_y = 0.0
+        self._latched_z = 0.0
+        self._latched_qx = 0.0
+        self._latched_qy = 0.0
+        self._latched_qz = 0.0
+        self._latched_qw = 1.0
 
         # Optional secondary device for split translation/rotation control
         self.declare_parameter("secondary_twist_topic", "")
@@ -140,12 +121,10 @@ class TwistToPoseNode(Node):
         )
 
         self.get_logger().info(
-            f"translation_frame={self.translation_frame}, rotation_frame={self.rotation_frame}, "
-            f"snap_to_actual_on_idle={self.snap_to_actual_on_idle}"
+            f"translation_frame={self.translation_frame}, rotation_frame={self.rotation_frame}"
         )
 
-        # Integration Timer
-        self.timer = self.create_timer(self.dt, self._integration_timer_callback)
+        self.timer = self.create_timer(self.dt, self._timer_callback)
 
     def _twist_callback(self, msg: Twist):
         """Stores the latest Twist command from the primary SpaceMouse."""
@@ -174,21 +153,21 @@ class TwistToPoseNode(Node):
             self.actual_qw = q.w / norm
 
         if not self._pose_initialized:
-            self.target_x = self.actual_x
-            self.target_y = self.actual_y
-            self.target_z = self.actual_z
-            self.target_qx = self.actual_qx
-            self.target_qy = self.actual_qy
-            self.target_qz = self.actual_qz
-            self.target_qw = self.actual_qw
+            self._latched_x = self.actual_x
+            self._latched_y = self.actual_y
+            self._latched_z = self.actual_z
+            self._latched_qx = self.actual_qx
+            self._latched_qy = self.actual_qy
+            self._latched_qz = self.actual_qz
+            self._latched_qw = self.actual_qw
             self._pose_initialized = True
             self.get_logger().info(
-                f"Target seeded from current_pose: "
-                f"({self.target_x:.3f}, {self.target_y:.3f}, {self.target_z:.3f})"
+                f"Pose initialized from current_pose: "
+                f"({self.actual_x:.3f}, {self.actual_y:.3f}, {self.actual_z:.3f})"
             )
 
-    def _integration_timer_callback(self):
-        """Integrates velocity to position and publishes the capped pose."""
+    def _timer_callback(self):
+        """Maps SpaceMouse input to a target pose offset from the actual pose."""
         if not self._pose_initialized:
             return
 
@@ -203,155 +182,103 @@ class TwistToPoseNode(Node):
         ay = self._apply_deadzone(angular_src.angular.y, self.angular_deadzone)
         az = self._apply_deadzone(angular_src.angular.z, self.angular_deadzone)
 
-        # 3. Check if idle — if so, snap target to actual pose and skip integration.
-        #    Uses snap_threshold on raw input (larger than deadzone) so the snap fires
-        #    while the device is still springing back to center, not after full settle.
-        linear_idle = (
-            abs(self.current_twist.linear.x) < self.linear_snap_threshold
-            and abs(self.current_twist.linear.y) < self.linear_snap_threshold
-            and abs(self.current_twist.linear.z) < self.linear_snap_threshold
-        )
-        angular_idle = (
-            abs(angular_src.angular.x) < self.angular_snap_threshold
-            and abs(angular_src.angular.y) < self.angular_snap_threshold
-            and abs(angular_src.angular.z) < self.angular_snap_threshold
-        )
-        if linear_idle and angular_idle:
-            if self.snap_to_actual_on_idle:
-                self.target_x = self.actual_x
-                self.target_y = self.actual_y
-                self.target_z = self.actual_z
-                self.target_qx = self.actual_qx
-                self.target_qy = self.actual_qy
-                self.target_qz = self.actual_qz
-                self.target_qw = self.actual_qw
+        # 3. Scale to max offset (input is [-1, 1] after deadzone).
+        lx *= self.max_distance
+        ly *= self.max_distance
+        lz *= self.max_distance
+        ax *= self.max_rotation
+        ay *= self.max_rotation
+        az *= self.max_rotation
+
+        # 4. Apply input frame rotation and per-axis flips.
+        if self._input_qw < 1.0:  # skip if identity quaternion
+            lx, ly, lz = self._rotate_vector_by_quaternion(
+                lx, ly, lz, self._input_qx, self._input_qy, self._input_qz, self._input_qw
+            )
+            ax, ay, az = self._rotate_vector_by_quaternion(
+                ax, ay, az, self._input_qx, self._input_qy, self._input_qz, self._input_qw
+            )
+        if self._flip_input_x:
+            lx, ax = -lx, -ax
+        if self._flip_input_y:
+            ly, ay = -ly, -ay
+        if self._flip_input_z:
+            lz, az = -lz, -az
+
+        # 5. Rotate into world frame if EE-relative mode is active.
+        if self.translation_frame == "ee":
+            lx, ly, lz = self._rotate_vector_by_quaternion(
+                lx, ly, lz, self.actual_qx, self.actual_qy, self.actual_qz, self.actual_qw
+            )
+        if self.rotation_frame == "ee":
+            ax, ay, az = self._rotate_vector_by_quaternion(
+                ax, ay, az, self.actual_qx, self.actual_qy, self.actual_qz, self.actual_qw
+            )
+
+        # 6. Check if idle — latch or track depending on config.
+        all_idle = lx == 0 and ly == 0 and lz == 0 and ax == 0 and ay == 0 and az == 0
+
+        if all_idle:
+            if self._latch_on_idle:
+                if self._was_active:
+                    # Freeze target where the robot is right now
+                    self._latched_x = self.actual_x
+                    self._latched_y = self.actual_y
+                    self._latched_z = self.actual_z
+                    self._latched_qx = self.actual_qx
+                    self._latched_qy = self.actual_qy
+                    self._latched_qz = self.actual_qz
+                    self._latched_qw = self.actual_qw
+                    self._was_active = False
+                target_x = self._latched_x
+                target_y = self._latched_y
+                target_z = self._latched_z
+                target_qx = self._latched_qx
+                target_qy = self._latched_qy
+                target_qz = self._latched_qz
+                target_qw = self._latched_qw
+            else:
+                target_x = self.actual_x
+                target_y = self.actual_y
+                target_z = self.actual_z
+                target_qx = self.actual_qx
+                target_qy = self.actual_qy
+                target_qz = self.actual_qz
+                target_qw = self.actual_qw
         else:
-            # 4. Scale by sensitivity and timestep.
-            lx *= self.linear_scale * self.dt
-            ly *= self.linear_scale * self.dt
-            lz *= self.linear_scale * self.dt
-            ax *= self.angular_scale * self.dt
-            ay *= self.angular_scale * self.dt
-            az *= self.angular_scale * self.dt
+            # 7. Compute target = actual + offset.
+            target_x = self.actual_x + lx
+            target_y = self.actual_y + ly
+            target_z = self.actual_z + lz
 
-            # 5. Apply input frame rotation and per-axis flips.
-            if self._input_qw < 1.0:  # skip if identity quaternion
-                lx, ly, lz = self._rotate_vector_by_quaternion(
-                    lx,
-                    ly,
-                    lz,
-                    self._input_qx,
-                    self._input_qy,
-                    self._input_qz,
-                    self._input_qw,
-                )
-                ax, ay, az = self._rotate_vector_by_quaternion(
-                    ax,
-                    ay,
-                    az,
-                    self._input_qx,
-                    self._input_qy,
-                    self._input_qz,
-                    self._input_qw,
-                )
-            if self._flip_input_x:
-                lx, ax = -lx, -ax
-            if self._flip_input_y:
-                ly, ay = -ly, -ay
-            if self._flip_input_z:
-                lz, az = -lz, -az
-
-            # 6. Rotate into world frame if EE-relative mode is active.
-            if self.translation_frame == "ee":
-                lx, ly, lz = self._rotate_vector_by_quaternion(
-                    lx,
-                    ly,
-                    lz,
-                    self.actual_qx,
-                    self.actual_qy,
-                    self.actual_qz,
-                    self.actual_qw,
-                )
-            if self.rotation_frame == "ee":
-                ax, ay, az = self._rotate_vector_by_quaternion(
-                    ax,
-                    ay,
-                    az,
-                    self.actual_qx,
-                    self.actual_qy,
-                    self.actual_qz,
-                    self.actual_qw,
-                )
-
-            # 7. Integrate translation.
-            self.target_x += lx
-            self.target_y += ly
-            self.target_z += lz
-
-            # 8. Integrate rotation via quaternion composition (avoids gimbal lock/wrapping).
-            #    (ax, ay, az) is a rotation vector in world frame; convert to quaternion delta.
+            # 8. Compute orientation target = delta_quat(offset) * actual.
             dqx, dqy, dqz, dqw = self._rotation_vector_to_quaternion(ax, ay, az)
-            # Apply world-frame rotation: q_new = dq * q_target
-            self.target_qx, self.target_qy, self.target_qz, self.target_qw = (
-                self._quaternion_multiply(
-                    dqx,
-                    dqy,
-                    dqz,
-                    dqw,
-                    self.target_qx,
-                    self.target_qy,
-                    self.target_qz,
-                    self.target_qw,
-                )
+            target_qx, target_qy, target_qz, target_qw = self._quaternion_multiply(
+                dqx,
+                dqy,
+                dqz,
+                dqw,
+                self.actual_qx,
+                self.actual_qy,
+                self.actual_qz,
+                self.actual_qw,
             )
-            # Keep target quaternion normalised
-            self.target_qx, self.target_qy, self.target_qz, self.target_qw = (
-                self._quaternion_normalize(
-                    self.target_qx, self.target_qy, self.target_qz, self.target_qw
-                )
+            target_qx, target_qy, target_qz, target_qw = self._quaternion_normalize(
+                target_qx, target_qy, target_qz, target_qw
             )
+            self._was_active = True
 
-            # 9. Apply translational clip.
-            dist = math.sqrt(
-                (self.target_x - self.actual_x) ** 2
-                + (self.target_y - self.actual_y) ** 2
-                + (self.target_z - self.actual_z) ** 2
-            )
-            if dist > self.max_distance:
-                scale_factor = self.max_distance / dist
-                self.target_x = self.actual_x + (self.target_x - self.actual_x) * scale_factor
-                self.target_y = self.actual_y + (self.target_y - self.actual_y) * scale_factor
-                self.target_z = self.actual_z + (self.target_z - self.actual_z) * scale_factor
-
-            # 10. Apply rotational clip (quaternion-space, avoids wrapping).
-            (self.target_qx, self.target_qy, self.target_qz, self.target_qw) = (
-                self._clip_rotation_to_actual(
-                    self.target_qx,
-                    self.target_qy,
-                    self.target_qz,
-                    self.target_qw,
-                    self.actual_qx,
-                    self.actual_qy,
-                    self.actual_qz,
-                    self.actual_qw,
-                    self.max_rotation,
-                )
-            )
-
-        # 11. Publish the target pose.
+        # 9. Publish the target pose.
         pose_msg = PoseStamped()
         pose_msg.header.stamp = self.get_clock().now().to_msg()
         pose_msg.header.frame_id = "base_link"
-
-        pose_msg.pose.position.x = self.target_x
-        pose_msg.pose.position.y = self.target_y
-        pose_msg.pose.position.z = self.target_z
-
-        pose_msg.pose.orientation.x = self.target_qx
-        pose_msg.pose.orientation.y = self.target_qy
-        pose_msg.pose.orientation.z = self.target_qz
-        pose_msg.pose.orientation.w = self.target_qw
-
+        pose_msg.pose.position.x = target_x
+        pose_msg.pose.position.y = target_y
+        pose_msg.pose.position.z = target_z
+        pose_msg.pose.orientation.x = target_qx
+        pose_msg.pose.orientation.y = target_qy
+        pose_msg.pose.orientation.z = target_qz
+        pose_msg.pose.orientation.w = target_qw
         self.pose_pub.publish(pose_msg)
 
     # ---------------------------------------------------------------------------
@@ -367,10 +294,10 @@ class TwistToPoseNode(Node):
         cp, sp = math.cos(p * 0.5), math.sin(p * 0.5)
         cy, sy = math.cos(y * 0.5), math.sin(y * 0.5)
         return (
-            sr * cp * cy - cr * sp * sy,  # qx
-            cr * sp * cy + sr * cp * sy,  # qy
-            cr * cp * sy - sr * sp * cy,  # qz
-            cr * cp * cy + sr * sp * sy,  # qw
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+            cr * cp * cy + sr * sp * sy,
         )
 
     def _apply_deadzone(self, value, threshold):
@@ -402,49 +329,8 @@ class TwistToPoseNode(Node):
         s = math.sin(angle * 0.5) / angle
         return rx * s, ry * s, rz * s, math.cos(angle * 0.5)
 
-    def _clip_rotation_to_actual(self, tqx, tqy, tqz, tqw, aqx, aqy, aqz, aqw, max_angle):
-        """Clip target quaternion so its angular distance from actual does not exceed max_angle."""
-        # Relative rotation: dq = q_target * q_actual_conj
-        dqx, dqy, dqz, dqw = self._quaternion_multiply(
-            tqx,
-            tqy,
-            tqz,
-            tqw,
-            -aqx,
-            -aqy,
-            -aqz,
-            aqw,  # conjugate of actual (unit quat)
-        )
-        dqx, dqy, dqz, dqw = self._quaternion_normalize(dqx, dqy, dqz, dqw)
-
-        # Ensure shortest-path representation (w >= 0)
-        if dqw < 0:
-            dqx, dqy, dqz, dqw = -dqx, -dqy, -dqz, -dqw
-
-        angle = 2.0 * math.acos(min(1.0, dqw))
-        if angle <= max_angle:
-            return tqx, tqy, tqz, tqw
-
-        # Scale delta quaternion down to max_angle
-        sin_half_orig = math.sin(angle * 0.5)
-        if sin_half_orig < 1e-10:
-            return tqx, tqy, tqz, tqw
-
-        scale = math.sin(max_angle * 0.5) / sin_half_orig
-        dqx *= scale
-        dqy *= scale
-        dqz *= scale
-        dqw = math.cos(max_angle * 0.5)
-
-        # Reconstruct target: q_target = dq_clipped * q_actual
-        return self._quaternion_multiply(dqx, dqy, dqz, dqw, aqx, aqy, aqz, aqw)
-
     def _rotate_vector_by_quaternion(self, vx, vy, vz, qx, qy, qz, qw):
-        """Rotate vector (vx, vy, vz) by quaternion using the Rodrigues formula.
-
-        Equivalent to the sandwich product v' = q * v * q_conj.
-        Used to transform a vector from EE frame into world/base frame.
-        """
+        """Rotate vector by quaternion (Rodrigues formula, equivalent to q * v * q_conj)."""
         cx = qy * vz - qz * vy
         cy = qz * vx - qx * vz
         cz = qx * vy - qy * vx

@@ -2,7 +2,7 @@
 #
 # Two SpaceMice control one robot arm: the primary handles translation,
 # the secondary handles rotation.
-# Launch with: pixi run start-dual config_file:=example_dual_device_config.yaml
+# Launch with: pixi run start-dual
 #
 # See example_config.yaml for full parameter documentation.
 
@@ -34,26 +34,15 @@ robot1:
   translation_frame: "world"
   rotation_frame: "world"
 
-  # ── Sensitivity ────────────────────────────────────────────────────────────
+  # ── Max offset ─────────────────────────────────────────────────────────────
 
-  linear_scale: 0.35
-  angular_scale: 1.0
+  max_distance: 0.075
+  max_rotation: 0.25
 
   # ── Deadband ───────────────────────────────────────────────────────────────
 
   linear_deadzone: 0.0
   angular_deadzone: 0.0
-
-  # ── Safety clipping ────────────────────────────────────────────────────────
-
-  max_distance: 0.15
-  max_rotation: 0.5
-
-  # ── Idle snap ──────────────────────────────────────────────────────────────
-
-  snap_to_actual_on_idle: true
-  linear_snap_threshold: 0.15
-  angular_snap_threshold: 0.15
 
   # ── Gripper ────────────────────────────────────────────────────────────────
 
