@@ -1,0 +1,27 @@
+name: ROS 2 workspace
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+
+      - name: Build
+        run: pixi run build
+
+      - name: Test
+        run: pixi run --environment default -- bash -c 'source install/setup.bash && colcon test && colcon test-result --verbose'

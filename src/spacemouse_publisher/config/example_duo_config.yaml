@@ -1,0 +1,60 @@
+# SpaceMouse Publisher — dual robot configuration
+#
+# Each top-level key defines one SpaceMouse + pose integrator pair.
+# The namespaces must match the respective robot controllers.
+# See example_config.yaml for full parameter documentation.
+
+LEFT:
+  namespace: left
+  device_path: /dev/hidraw6
+  operator_position_front: true
+  input_frame_rpy: [0.0, 0.0, 0.0]
+  flip_input_x: false
+  flip_input_y: false
+  flip_input_z: false
+  current_pose_topic: "/left/current_pose"
+  target_pose_topic: "/left/target_pose"
+  translation_frame: "ee"
+  rotation_frame: "ee"
+  linear_scale: 0.1
+  angular_scale: 0.25
+  linear_deadzone: 0.05
+  angular_deadzone: 0.05
+  max_distance: 0.15
+  max_rotation: 0.5
+  snap_to_actual_on_idle: true
+  linear_snap_threshold: 0.15
+  angular_snap_threshold: 0.15
+  timer_period: 0.01
+  gripper_topic: "space_mouse/target_gripper_width_percent"
+  gripper_mode: "absolute"
+  gripper_step: 0.01
+  gripper_topic: "space_mouse/target_gripper_width_percent"
+  gripper_mode: "absolute"
+  gripper_step: 0.01
+
+RIGHT:
+  namespace: right
+  device_path: /dev/hidraw7
+  operator_position_front: true
+  input_frame_rpy: [0.0, 0.0, 0.0]
+  flip_input_x: false
+  flip_input_y: false
+  flip_input_z: false
+  current_pose_topic: "/right/current_pose"
+  target_pose_topic: "/right/target_pose"
+  translation_frame: "ee"
+  rotation_frame: "ee"
+  linear_scale: 0.1
+  angular_scale: 0.25
+  linear_deadzone: 0.05
+  angular_deadzone: 0.05
+  max_distance: 0.15
+  max_rotation: 0.5
+  snap_to_actual_on_idle: true
+  linear_snap_threshold: 0.15
+  angular_snap_threshold: 0.15
+  timer_period: 0.01
+  gripper_topic: "space_mouse/target_gripper_width_percent"
+  gripper_mode: "absolute"
+  gripper_step: 0.01

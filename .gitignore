@@ -1,0 +1,14 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+
+# Pixi environment
+.pixi/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editor
+.vscode/

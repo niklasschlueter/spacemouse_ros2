@@ -1,0 +1,39 @@
+[project]
+name = "spacemouse_publisher"
+version = "0.2.0"
+description = "ROS 2 nodes for parsing SpaceMouse input and publishing Twist/Pose commands."
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "pyspacemouse<2.0.0",
+    "pyyaml",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.workspace]
+channels = ["robostack-jazzy", "conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.dependencies]
+ros-jazzy-rclpy = "*"
+ros-jazzy-geometry-msgs = "*"
+ros-jazzy-std-msgs = "*"
+ros-jazzy-launch-ros = "*"
+ros-jazzy-ros2cli = "*"
+ros-jazzy-ros2run = "*"
+ros-jazzy-ros2topic = "*"
+ros-jazzy-ros2launch = "*"
+colcon-common-extensions = "*"
+
+# C library required by pyspacemouse (HID communication)
+hidapi = "*"
+libhidapi = "*"
+
+[tool.pixi.tasks]
+build = "colcon build --symlink-install"
+clean = "rm -rf build/ install/ log/"
+start = "bash -c 'source install/setup.bash && ros2 launch spacemouse_publisher spacemouse_publisher.launch.py'"
