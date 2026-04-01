@@ -25,3 +25,24 @@ jobs:
 
       - name: Lint
         run: pixi run lint
+
+  build-colcon:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          rosdep update
+          rosdep install --from-paths src --ignore-src -r -y
+
+      - name: Build
+        run: |
+          . /opt/ros/jazzy/setup.bash
+          colcon build --symlink-install
