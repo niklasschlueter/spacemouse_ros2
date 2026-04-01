@@ -1,5 +1,7 @@
 # spacemouse_ros2
 
+[![Build (pixi)](https://github.com/niklasschlueter/spacemouse_ros2/actions/workflows/ros2.yaml/badge.svg)](https://github.com/niklasschlueter/spacemouse_ros2/actions/workflows/ros2.yaml)
+
 A minimal ROS 2 package that maps 3Dconnexion SpaceMouse input to ROS 2 topics. It publishes a continuously integrated `PoseStamped` target and optional gripper commands — nothing more. It assumes you have your own tracking controller that follows the target pose, and optionally a gripper controller that acts on the gripper topic.
 
 ## Architecture
