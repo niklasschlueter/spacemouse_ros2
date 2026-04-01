@@ -63,6 +63,10 @@ robot1:
   # Maximum angular offset (rad) at full SpaceMouse deflection (~0.5 rad ≈ 28°).
   max_rotation: 0.5
 
+  # When true, the target freezes at the actual pose on release (stable setpoint).
+  # When false, the target continuously tracks the actual pose while idle.
+  latch_on_idle: true
+
   # ── Deadband ───────────────────────────────────────────────────────────────
 
   # Minimum raw input (in the [-1, 1] range) required before any motion is

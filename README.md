@@ -134,7 +134,7 @@ Four things typically need to change:
 | SpaceMouse device | `device_path` | Only needed with multiple connected devices. Leave empty to auto-detect. |
 | Gripper | `gripper_interface`, `gripper_action` / `gripper_topic` | Set `gripper_interface: "action"` and point `gripper_action` at your gripper controller's action server. If your gripper uses a different joint range, adjust `gripper_max_position`. Set `gripper_interface: "topic"` if you have your own bridge node. |
 
-Everything else (sensitivity, deadband, clipping, snap) has sensible defaults and can be tuned later.
+Everything else (deadband, max offset, idle behaviour) has sensible defaults and can be tuned later.
 
 ### Identify connected SpaceMouse devices
 
@@ -175,6 +175,8 @@ Example output:
 | **Max offset** | | | |
 | `max_distance` | float | `0.15` | Maximum translational offset (m) from actual EE at full SpaceMouse deflection. |
 | `max_rotation` | float | `0.5` | Maximum angular offset (rad, ≈28°) from actual EE at full deflection. |
+| **Idle behaviour** | | | |
+| `latch_on_idle` | bool | `true` | When `true`, the target freezes at the actual pose the moment all inputs go idle (stable setpoint for the controller). When `false`, the target continuously tracks the actual pose while idle. |
 | **Deadband** | | | |
 | `linear_deadzone` | float | `0.05` | Raw input fraction (0–1) that must be exceeded before translation starts. Inputs above have the threshold subtracted so motion begins at zero with no step. |
 | `angular_deadzone` | float | `0.05` | Same as `linear_deadzone` but for rotation. |
@@ -197,7 +199,7 @@ Example output:
 |---|---|---|---|
 | `space_mouse/target_cartesian_velocity_percent` | published | `geometry_msgs/Twist` | Raw 6-DOF SpaceMouse input scaled to [−1, 1]. Internal topic between the two nodes. |
 | `gripper_topic` *(configurable)* | published | `std_msgs/Float32` | Gripper command. Absolute mode: `0.0` = open (Button 1), `1.0` = close (Button 2). Relative mode: value accumulates while button held. |
-| `current_pose_topic` *(configurable)* | subscribed | `geometry_msgs/PoseStamped` | Robot's actual EE pose. Used to seed the target on startup and for clipping/snap. |
+| `current_pose_topic` *(configurable)* | subscribed | `geometry_msgs/PoseStamped` | Robot's actual EE pose. Used as the offset origin and to seed the idle latch on startup. |
 | `target_pose_topic` *(configurable)* | published | `geometry_msgs/PoseStamped` | Integrated target EE pose for the robot controller to track. |
 
 ---
@@ -241,7 +243,7 @@ Launch with the dedicated dual-device launch file:
 pixi run start-dual
 ```
 
-The primary device's linear axes drive translation; the secondary device's angular axes drive rotation. All other parameters (sensitivity, deadband, clipping, snap, gripper) apply as normal. Gripper buttons work on the primary device.
+The primary device's linear axes drive translation; the secondary device's angular axes drive rotation. All other parameters (deadband, max offset, gripper) apply as normal. Gripper buttons work on the primary device.
 
 ---
 

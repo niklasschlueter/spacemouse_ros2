@@ -38,6 +38,7 @@ robot1:
 
   max_distance: 0.075
   max_rotation: 0.25
+  latch_on_idle: true
 
   # ── Deadband ───────────────────────────────────────────────────────────────
 
