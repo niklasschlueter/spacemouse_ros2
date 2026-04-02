@@ -29,6 +29,7 @@ ros-jazzy-ros2topic = "*"
 ros-jazzy-ros2launch = "*"
 colcon-common-extensions = "*"
 ros-jazzy-control-msgs = "*"
+ros-jazzy-rqt-reconfigure = "*"
 ruff = "*"
 
 # C library required by pyspacemouse (HID communication)

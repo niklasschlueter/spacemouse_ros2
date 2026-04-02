@@ -2,6 +2,7 @@ import math
 
 import rclpy
 from geometry_msgs.msg import PoseStamped, Twist
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 
 
@@ -69,6 +70,9 @@ class TwistToPoseNode(Node):
         self._flip_input_y = self.get_parameter("flip_input_y").value
         self._flip_input_z = self.get_parameter("flip_input_z").value
 
+        # Allow runtime tuning via ros2 param set / rqt_reconfigure
+        self.add_on_set_parameters_callback(self._on_parameter_change)
+
         # Robot's actual pose
         self.actual_x = 0.0
         self.actual_y = 0.0
@@ -79,6 +83,10 @@ class TwistToPoseNode(Node):
         self.actual_qw = 1.0
 
         self._pose_initialized = False
+        self._last_pose_time = None
+        # If current_pose stops publishing (robot reset/respawn), the node stops
+        # publishing target_pose and re-latches to the new actual pose when it resumes.
+        self._pose_timeout = 0.5  # seconds
         self.current_twist = Twist()
         self._was_active = False
         self._latched_x = 0.0
@@ -126,6 +134,35 @@ class TwistToPoseNode(Node):
 
         self.timer = self.create_timer(self.dt, self._timer_callback)
 
+    def _on_parameter_change(self, params):
+        """Update cached values when parameters are changed at runtime."""
+        for param in params:
+            if param.name == "max_distance":
+                self.max_distance = param.value
+            elif param.name == "max_rotation":
+                self.max_rotation = param.value
+            elif param.name == "linear_deadzone":
+                self.linear_deadzone = param.value
+            elif param.name == "angular_deadzone":
+                self.angular_deadzone = param.value
+            elif param.name == "latch_on_idle":
+                self._latch_on_idle = param.value
+            elif param.name == "translation_frame":
+                self.translation_frame = param.value
+            elif param.name == "rotation_frame":
+                self.rotation_frame = param.value
+            elif param.name == "flip_input_x":
+                self._flip_input_x = param.value
+            elif param.name == "flip_input_y":
+                self._flip_input_y = param.value
+            elif param.name == "flip_input_z":
+                self._flip_input_z = param.value
+            elif param.name == "input_frame_rpy":
+                self._input_qx, self._input_qy, self._input_qz, self._input_qw = (
+                    self._rpy_degrees_to_quaternion(param.value[0], param.value[1], param.value[2])
+                )
+        return SetParametersResult(successful=True)
+
     def _twist_callback(self, msg: Twist):
         """Stores the latest Twist command from the primary SpaceMouse."""
         self.current_twist = msg
@@ -136,23 +173,30 @@ class TwistToPoseNode(Node):
 
     def _actual_pose_callback(self, msg: PoseStamped):
         """Updates the internal tracker with the robot's real physical location."""
-        self.actual_x = msg.pose.position.x
-        self.actual_y = msg.pose.position.y
-        self.actual_z = msg.pose.position.z
-
         q = msg.pose.orientation
         norm = math.sqrt(q.x**2 + q.y**2 + q.z**2 + q.w**2)
         if norm < 0.5:
             self.get_logger().warn(
                 "Near-zero quaternion in /current_pose; skipping orientation update."
             )
-        else:
-            self.actual_qx = q.x / norm
-            self.actual_qy = q.y / norm
-            self.actual_qz = q.z / norm
-            self.actual_qw = q.w / norm
+            return
 
-        if not self._pose_initialized:
+        self.actual_x = msg.pose.position.x
+        self.actual_y = msg.pose.position.y
+        self.actual_z = msg.pose.position.z
+        self.actual_qx = q.x / norm
+        self.actual_qy = q.y / norm
+        self.actual_qz = q.z / norm
+        self.actual_qw = q.w / norm
+
+        was_stale = not self._pose_initialized or (
+            self._last_pose_time is not None
+            and (self.get_clock().now().nanoseconds - self._last_pose_time) * 1e-9
+            > self._pose_timeout
+        )
+        self._last_pose_time = self.get_clock().now().nanoseconds
+
+        if was_stale:
             self._latched_x = self.actual_x
             self._latched_y = self.actual_y
             self._latched_z = self.actual_z
@@ -160,15 +204,25 @@ class TwistToPoseNode(Node):
             self._latched_qy = self.actual_qy
             self._latched_qz = self.actual_qz
             self._latched_qw = self.actual_qw
-            self._pose_initialized = True
+            self._was_active = False
+            if not self._pose_initialized:
+                self._pose_initialized = True
             self.get_logger().info(
-                f"Pose initialized from current_pose: "
+                f"Target latched to current_pose: "
                 f"({self.actual_x:.3f}, {self.actual_y:.3f}, {self.actual_z:.3f})"
             )
 
     def _timer_callback(self):
         """Maps SpaceMouse input to a target pose offset from the actual pose."""
         if not self._pose_initialized:
+            return
+
+        # Stop publishing if current_pose has gone stale (robot stopped/respawning).
+        if (
+            self._last_pose_time is not None
+            and (self.get_clock().now().nanoseconds - self._last_pose_time) * 1e-9
+            > self._pose_timeout
+        ):
             return
 
         # 1. Select angular source (secondary device in dual mode, primary otherwise).
