@@ -89,6 +89,7 @@ class TwistToPoseNode(Node):
         self._pose_timeout = 0.5  # seconds
         self.current_twist = Twist()
         self._was_active = False
+        self._status_timer_ticks = 0  # for periodic status logging
         self._latched_x = 0.0
         self._latched_y = 0.0
         self._latched_z = 0.0
@@ -214,6 +215,40 @@ class TwistToPoseNode(Node):
 
     def _timer_callback(self):
         """Maps SpaceMouse input to a target pose offset from the actual pose."""
+        # Log status every 2 seconds (200 ticks at 100 Hz).
+        self._status_timer_ticks += 1
+        if self._status_timer_ticks >= 200:
+            self._status_timer_ticks = 0
+            if not self._pose_initialized:
+                self.get_logger().warn(
+                    f"Waiting for first message on '{self.get_parameter('current_pose_topic').value}' ..."
+                )
+            elif (
+                self._last_pose_time is not None
+                and (self.get_clock().now().nanoseconds - self._last_pose_time) * 1e-9
+                > self._pose_timeout
+            ):
+                age = (self.get_clock().now().nanoseconds - self._last_pose_time) * 1e-9
+                self.get_logger().warn(
+                    f"current_pose stale ({age:.1f}s > {self._pose_timeout}s timeout) — paused"
+                )
+            else:
+                all_zero = all(
+                    v == 0
+                    for v in [
+                        self.current_twist.linear.x,
+                        self.current_twist.linear.y,
+                        self.current_twist.linear.z,
+                        self.current_twist.angular.x,
+                        self.current_twist.angular.y,
+                        self.current_twist.angular.z,
+                    ]
+                )
+                if all_zero:
+                    self.get_logger().info("Publishing target_pose (SpaceMouse idle — latched)")
+                else:
+                    self.get_logger().info("Publishing target_pose (SpaceMouse active)")
+
         if not self._pose_initialized:
             return
 

@@ -35,10 +35,10 @@ robot1:
   # ── Topics ─────────────────────────────────────────────────────────────────
 
   # Topic on which the robot publishes its current EE pose.
-  current_pose_topic: "/current_pose"
+  current_pose_topic: "/r100_0207/manipulators/current_pose"
 
   # Topic on which this node publishes the commanded target EE pose.
-  target_pose_topic: "/target_pose"
+  target_pose_topic: "/r100_0207/manipulators/target_pose"
 
   # ── Input frame ────────────────────────────────────────────────────────────
 
@@ -58,10 +58,10 @@ robot1:
   # Full deflection → max offset. Zero input → target at actual pose (no lag).
 
   # Maximum translational offset (m) at full SpaceMouse deflection.
-  max_distance: 0.15
+  max_distance: 0.05
 
   # Maximum angular offset (rad) at full SpaceMouse deflection (~0.5 rad ≈ 28°).
-  max_rotation: 0.5
+  max_rotation: 0.2
 
   # When true, the target freezes at the actual pose on release (stable setpoint).
   # When false, the target continuously tracks the actual pose while idle.
