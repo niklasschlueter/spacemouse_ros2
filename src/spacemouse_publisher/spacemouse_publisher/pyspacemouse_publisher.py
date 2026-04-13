@@ -115,7 +115,16 @@ class SpaceMousePublisher(Node):
         if not self._device_open_success:
             return
 
+        # Drain hidraw — pyspacemouse.read() consumes one report per call, device emits > 100 Hz.
+        MAX_DRAIN = 64
         state = pyspacemouse.read()
+        if state is None:
+            return
+        for _ in range(MAX_DRAIN):
+            next_state = pyspacemouse.read()
+            if next_state.t == state.t:  # t unchanged → no new report consumed
+                break
+            state = next_state
 
         # Map SpaceMouse HID axes to ROS convention (X-forward, Y-left, Z-up)
         twist_msg = Twist()

@@ -35,10 +35,10 @@ robot1:
   # ── Topics ─────────────────────────────────────────────────────────────────
 
   # Topic on which the robot publishes its current EE pose.
-  current_pose_topic: "/r100_0207/manipulators/current_pose"
+  current_pose_topic: "/current_pose"
 
   # Topic on which this node publishes the commanded target EE pose.
-  target_pose_topic: "/r100_0207/manipulators/target_pose"
+  target_pose_topic: "/target_pose"
 
   # ── Input frame ────────────────────────────────────────────────────────────
 
