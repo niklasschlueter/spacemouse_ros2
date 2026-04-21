@@ -67,6 +67,18 @@ robot1:
   # When false, the target continuously tracks the actual pose while idle.
   latch_on_idle: true
 
+  # ── Controller-aware idle ─────────────────────────────────────────────────
+  # When true (default), the node subscribes to the named ros2_control
+  # controller's lifecycle transitions. While that controller is INACTIVE
+  # (e.g. the robot is being homed via joint_trajectory_controller),
+  # target_pose tracks the actual pose regardless of latch_on_idle —
+  # preventing a stale setpoint jump when control switches back. When the
+  # controller is ACTIVE, normal latch_on_idle behaviour applies. Set false
+  # only if you aren't running under ros2_control.
+  controller_aware: true
+  controller_name: "cartesian_controller"
+  controller_manager_node: "/controller_manager"
+
   # ── Deadband ───────────────────────────────────────────────────────────────
 
   # Minimum raw input (in the [-1, 1] range) required before any motion is

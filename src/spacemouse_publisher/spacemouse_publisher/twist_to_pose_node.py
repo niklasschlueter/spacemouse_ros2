@@ -1,7 +1,9 @@
 import math
 
 import rclpy
+from controller_manager_msgs.srv import ListControllers
 from geometry_msgs.msg import PoseStamped, Twist
+from lifecycle_msgs.msg import TransitionEvent
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 
@@ -52,6 +54,18 @@ class TwistToPoseNode(Node):
         self.declare_parameter("flip_input_y", False)
         self.declare_parameter("flip_input_z", False)
 
+        # Controller-aware mode: subscribe to the named ros2_control controller's
+        # transition_event and override the idle behaviour to "track actual pose"
+        # while that controller is INACTIVE. This prevents stale setpoint jumps
+        # when the robot is driven (e.g. homed via JTC) while spacemouse is
+        # idle — the latched target would otherwise be the pose from before the
+        # home move, and on switch-back the cartesian controller would jump.
+        # Default true because the failure mode is invisible and dangerous; set
+        # false only if you aren't running under ros2_control.
+        self.declare_parameter("controller_aware", True)
+        self.declare_parameter("controller_name", "cartesian_controller")
+        self.declare_parameter("controller_manager_node", "/controller_manager")
+
         self.linear_deadzone = self.get_parameter("linear_deadzone").value
         self.angular_deadzone = self.get_parameter("angular_deadzone").value
         self.max_distance = self.get_parameter("max_distance").value
@@ -69,6 +83,12 @@ class TwistToPoseNode(Node):
         self._flip_input_x = self.get_parameter("flip_input_x").value
         self._flip_input_y = self.get_parameter("flip_input_y").value
         self._flip_input_z = self.get_parameter("flip_input_z").value
+        self._controller_aware = self.get_parameter("controller_aware").value
+        self._controller_name = self.get_parameter("controller_name").value
+        self._controller_manager_node = self.get_parameter("controller_manager_node").value
+        # Default True so behaviour is unchanged when controller_aware is off;
+        # the initial list_controllers query below will correct it if needed.
+        self._cartesian_active = True
 
         # Allow runtime tuning via ros2 param set / rqt_reconfigure
         self.add_on_set_parameters_callback(self._on_parameter_change)
@@ -133,7 +153,76 @@ class TwistToPoseNode(Node):
             f"translation_frame={self.translation_frame}, rotation_frame={self.rotation_frame}"
         )
 
+        if self._controller_aware:
+            self._setup_controller_awareness()
+
         self.timer = self.create_timer(self.dt, self._timer_callback)
+
+    # ---------------------------------------------------------------------------
+    # Controller-aware mode
+    # ---------------------------------------------------------------------------
+
+    def _setup_controller_awareness(self):
+        """Subscribe to transition_event + query initial state of the target controller."""
+        # transition_event fires on each lifecycle transition. Handles the
+        # runtime case once the node is up.
+        self.create_subscription(
+            TransitionEvent,
+            f"/{self._controller_name}/transition_event",
+            self._on_controller_transition,
+            10,
+        )
+        self.get_logger().info(
+            f"controller_aware: watching /{self._controller_name}/transition_event"
+        )
+
+        # One-shot initial state query — transition_event only fires on CHANGES,
+        # so if the controller is already active/inactive at node startup we'd
+        # otherwise never know.
+        list_srv = f"{self._controller_manager_node}/list_controllers"
+        self._list_client = self.create_client(ListControllers, list_srv)
+        if self._list_client.wait_for_service(timeout_sec=5.0):
+            future = self._list_client.call_async(ListControllers.Request())
+            future.add_done_callback(self._on_initial_controller_list)
+        else:
+            self.get_logger().warn(
+                f"{list_srv} not available within 5s — assuming "
+                f"_cartesian_active={self._cartesian_active} until first transition_event"
+            )
+
+    def _on_initial_controller_list(self, future):
+        try:
+            resp = future.result()
+        except Exception as e:  # noqa: BLE001
+            self.get_logger().warn(f"list_controllers call failed: {e}")
+            return
+        for c in resp.controller:
+            if c.name == self._controller_name:
+                self._cartesian_active = c.state == "active"
+                self.get_logger().info(
+                    f"Initial state of {self._controller_name}: {c.state} "
+                    f"(_cartesian_active={self._cartesian_active})"
+                )
+                return
+        self.get_logger().warn(
+            f"controller_aware: '{self._controller_name}' not found in list_controllers; "
+            f"keeping default _cartesian_active={self._cartesian_active}"
+        )
+
+    def _on_controller_transition(self, msg: TransitionEvent):
+        # lifecycle_msgs/State.PRIMARY_STATE_ACTIVE = 3
+        was_active = self._cartesian_active
+        self._cartesian_active = msg.goal_state.id == 3
+        if self._cartesian_active != was_active:
+            self.get_logger().info(
+                f"{self._controller_name} transition: {msg.transition.label} "
+                f"→ _cartesian_active={self._cartesian_active}"
+            )
+            # Force re-latch on the next idle tick once active — prevents any
+            # residual "_was_active=False" from the inactive period reusing a
+            # stale latched target.
+            if self._cartesian_active:
+                self._was_active = True
 
     def _on_parameter_change(self, params):
         """Update cached values when parameters are changed at runtime."""
@@ -308,7 +397,19 @@ class TwistToPoseNode(Node):
         all_idle = lx == 0 and ly == 0 and lz == 0 and ax == 0 and ay == 0 and az == 0
 
         if all_idle:
-            if self._latch_on_idle:
+            if self._controller_aware and not self._cartesian_active:
+                # Downstream consumer is inactive — track actual pose so the
+                # cached setpoint can't go stale while e.g. JTC is homing.
+                # Forces re-latch on the next idle tick once active.
+                target_x = self.actual_x
+                target_y = self.actual_y
+                target_z = self.actual_z
+                target_qx = self.actual_qx
+                target_qy = self.actual_qy
+                target_qz = self.actual_qz
+                target_qw = self.actual_qw
+                self._was_active = True
+            elif self._latch_on_idle:
                 if self._was_active:
                     # Freeze target where the robot is right now
                     self._latched_x = self.actual_x

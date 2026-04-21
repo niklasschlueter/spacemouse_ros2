@@ -29,6 +29,8 @@ ros-jazzy-ros2topic = "*"
 ros-jazzy-ros2launch = "*"
 colcon-common-extensions = "*"
 ros-jazzy-control-msgs = "*"
+ros-jazzy-controller-manager-msgs = "*"   # for controller-aware mode in twist_to_pose_node
+ros-jazzy-lifecycle-msgs = "*"            # for TransitionEvent subscription
 ros-jazzy-rqt-reconfigure = "*"
 ruff = "*"
 

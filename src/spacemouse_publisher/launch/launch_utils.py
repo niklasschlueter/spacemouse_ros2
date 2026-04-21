@@ -47,6 +47,9 @@ def pose_integrator_params(config):
         ("flip_input_z", bool),
         ("current_pose_topic", str),
         ("target_pose_topic", str),
+        ("controller_aware", bool),
+        ("controller_name", str),
+        ("controller_manager_node", str),
     ]:
         if key in config:
             params[key] = cast(config[key])
